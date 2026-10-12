@@ -124,7 +124,7 @@ export function useListados(options?: UseListadosOptions) {
     } finally {
       setIsLoading(false);
     }
-  }, [estado, excludeEstado, lineaProduccionId, departamentoId, numeroListado, fechaDesde, fechaHasta, page]);
+  }, [estado, excludeEstado, lineaProduccionId, departamentoId, numeroListado, fechaDesde, fechaHasta, page, options?.customLimit]);
 
   useEffect(() => {
     fetchListados();

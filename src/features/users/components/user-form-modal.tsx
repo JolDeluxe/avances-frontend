@@ -115,7 +115,7 @@ export function UserFormModal({
       setIsSubmitting(false);
       setError(null);
     }
-  }, [isOpen, user, roles, departamentos]);
+  }, [isOpen, user, roles, departamentos, availableLines]);
 
   const handleRoleChange = (newRolId: number) => {
     setRolId(newRolId);

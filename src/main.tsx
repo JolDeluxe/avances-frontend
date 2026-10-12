@@ -2,6 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@/styles/main.css';
 import { App } from '@/app/app';
+import { registerPwaServiceWorker } from '@/pwa';
+import { setupChunkErrorListener } from '@/app/errors/chunk-error-listener';
+
+setupChunkErrorListener();
+registerPwaServiceWorker();
 
 /**
  * Punto de entrada de Vite / React DOM (SKILL.md §7).

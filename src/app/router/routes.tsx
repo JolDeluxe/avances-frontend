@@ -1,19 +1,59 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, type RouteObject } from 'react-router';
 import { ROUTES } from './route-paths';
 import { PERMISOS } from '@/config/permissions';
 import { NotFoundPage } from '@/app/errors/not-found-page';
 import { ErrorPage } from '@/app/errors/error-page';
-import { LoginPage } from '@/features/auth';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
-import { UsersPage } from '@/features/users/pages/users-page';
-import { LineasPage } from '@/features/lineas';
-import { ListadosLayoutPage } from '@/features/listados/pages/listados-layout-page';
-import { ListadosAdministracionPage } from '@/features/listados/pages/administracion/listados-administracion-page';
-import { ListadosPendientesPage } from '@/features/listados/pages/pendientes/listados-pendientes-page';
-import { ListadosAuditoriaPage } from '@/features/listados/pages/auditoria/listados-auditoria-page';
-import { ListadosHistorialPage } from '@/features/listados/pages/historial/listados-historial-page';
 import { RequireAuth, RedirectIfAuthenticated, RequirePermission, RequireRole } from './route-guards';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+
+/**
+ * Lazy loading por módulo/ruta para optimización de rendimiento y división de bundle (Code Splitting).
+ * Reduce el bundle principal cargando cada subsistema bajo demanda.
+ */
+const LoginPage = lazy(() => import('@/features/auth').then((m) => ({ default: m.LoginPage })));
+const UsersPage = lazy(() => import('@/features/users/pages/users-page').then((m) => ({ default: m.UsersPage })));
+const LineasPage = lazy(() => import('@/features/lineas').then((m) => ({ default: m.LineasPage })));
+const ListadosLayoutPage = lazy(() =>
+  import('@/features/listados/pages/listados-layout-page').then((m) => ({ default: m.ListadosLayoutPage })),
+);
+const ListadosAdministracionPage = lazy(() =>
+  import('@/features/listados/pages/administracion/listados-administracion-page').then((m) => ({
+    default: m.ListadosAdministracionPage,
+  })),
+);
+const ListadosPendientesPage = lazy(() =>
+  import('@/features/listados/pages/pendientes/listados-pendientes-page').then((m) => ({
+    default: m.ListadosPendientesPage,
+  })),
+);
+const ListadosAuditoriaPage = lazy(() =>
+  import('@/features/listados/pages/auditoria/listados-auditoria-page').then((m) => ({
+    default: m.ListadosAuditoriaPage,
+  })),
+);
+const ListadosHistorialPage = lazy(() =>
+  import('@/features/listados/pages/historial/listados-historial-page').then((m) => ({
+    default: m.ListadosHistorialPage,
+  })),
+);
+
+/** Fallback visual ligero durante la carga asíncrona de chunks de ruta */
+function RouteLoadingFallback() {
+  return (
+    <div className="flex h-full min-h-[300px] w-full items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-3 border-brand-500 border-t-transparent" />
+        <span className="text-xs font-medium text-text-muted">Cargando módulo...</span>
+      </div>
+    </div>
+  );
+}
+
+function withSuspense(component: ReactNode): ReactNode {
+  return <Suspense fallback={<RouteLoadingFallback />}>{component}</Suspense>;
+}
 
 /**
  * Componente de redirección de índice para el módulo Listados.
@@ -51,6 +91,7 @@ function ListadosIndexRedirect() {
  *
  * Integra:
  * - Redirección de raíz
+ * - Code splitting por ruta con lazy() y Suspense
  * - Rutas públicas protegidas por RedirectIfAuthenticated (/login)
  * - Rutas privadas protegidas por RequireAuth (/dashboard con DashboardLayout anidado)
  * - Restricciones por permisos efectivos en Usuarios y Listados Administración
@@ -67,7 +108,7 @@ export const routes: RouteObject[] = [
     path: ROUTES.LOGIN,
     element: (
       <RedirectIfAuthenticated>
-        <LoginPage />
+        {withSuspense(<LoginPage />)}
       </RedirectIfAuthenticated>
     ),
     errorElement: <ErrorPage />,
@@ -95,7 +136,7 @@ export const routes: RouteObject[] = [
                   permission={PERMISOS.USUARIO_VER}
                   fallbackRoute={ROUTES.LISTADOS}
                 >
-                  <UsersPage />
+                  {withSuspense(<UsersPage />)}
                 </RequirePermission>
               </RequireRole>
             ),
@@ -107,14 +148,14 @@ export const routes: RouteObject[] = [
                 allowedRoles={['SUPER_ADMIN']}
                 fallbackRoute={ROUTES.LISTADOS}
               >
-                <LineasPage />
+                {withSuspense(<LineasPage />)}
               </RequireRole>
             ),
           },
           {
             // Módulo Listados — layout con navegación interna
             path: ROUTES.LISTADOS,
-            element: <ListadosLayoutPage />,
+            element: withSuspense(<ListadosLayoutPage />),
             children: [
               {
                 index: true,
@@ -132,7 +173,7 @@ export const routes: RouteObject[] = [
                     ]}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
-                    <ListadosAdministracionPage />
+                    {withSuspense(<ListadosAdministracionPage />)}
                   </RequirePermission>
                 ),
               },
@@ -143,7 +184,7 @@ export const routes: RouteObject[] = [
                     allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
-                    <ListadosPendientesPage />
+                    {withSuspense(<ListadosPendientesPage />)}
                   </RequireRole>
                 ),
               },
@@ -154,7 +195,7 @@ export const routes: RouteObject[] = [
                     allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
-                    <ListadosAuditoriaPage />
+                    {withSuspense(<ListadosAuditoriaPage />)}
                   </RequireRole>
                 ),
               },
@@ -165,7 +206,7 @@ export const routes: RouteObject[] = [
                     allowedRoles={['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
-                    <ListadosHistorialPage />
+                    {withSuspense(<ListadosHistorialPage />)}
                   </RequireRole>
                 ),
               },
