@@ -1,7 +1,6 @@
 [build]
-  base = "frontend"
-  publish = "dist"
   command = "bun run build"
+  publish = "dist"
 
 [[headers]]
   for = "/sw.js"
