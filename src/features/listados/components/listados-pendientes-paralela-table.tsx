@@ -509,7 +509,7 @@ export function ListadosPendientesParalelaTable({
   formatFecha,
   isLoading,
   acciones,
-  emptyMessage = 'No hay listados de Materia Prima para mostrar.',
+  emptyMessage = 'No hay listados de Almacén MBC para mostrar.',
   highlightedListadoId,
   entregandoListadoId,
   entregandoFrente,

@@ -16,7 +16,7 @@ export function SidebarHeader() {
         {sidebarExpanded ? (
           <img
             src="/img/01_Cuadra.webp"
-            alt="Materia Prima"
+            alt="Almacén MBC"
             className="sidebar-logo h-10 sm:h-11 w-auto max-h-12 object-contain animate-in fade-in zoom-in duration-300"
           />
         ) : (

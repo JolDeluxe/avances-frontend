@@ -19,7 +19,7 @@ interface SidebarProps {
  * - Mobile: max-lg:bg-marca-secundario/80 max-lg:backdrop-blur-2xl
  * - Footer con badge bg-marca-primario/50 text-cuadra-arena
  */
-export function Sidebar({ navItems, appName = 'Materia Prima', appVersion = 'v.desarrollo' }: SidebarProps) {
+export function Sidebar({ navItems, appName = 'Almacén MBC', appVersion = 'v.desarrollo' }: SidebarProps) {
   const { sidebarExpanded } = useLayoutUI();
 
   return (

@@ -82,7 +82,7 @@ export function Navbar({ navItems, user, onLogout }: NavbarProps) {
         <div className="flex items-center justify-center">
           <img
             src="/img/01_Cuadra.webp"
-            alt="Materia Prima"
+            alt="Almacén MBC"
             className="h-7 sm:h-12 md:h-14 max-h-10 w-auto object-contain drop-shadow-xs"
           />
         </div>

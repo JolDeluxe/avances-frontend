@@ -533,13 +533,13 @@ export function ListadosPendientesPage(): ReactNode {
       )}
 
 
-      {/* Discrepancias / No clasificados de Materia Prima */}
+      {/* Discrepancias / No clasificados de Almacén MBC */}
       {noClasificados.length > 0 && !isLoading && (
         <div className="p-3 bg-warning-subtle border border-warning/30 rounded-xl text-xs text-warning-text flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Icon name="warning" size="xs" className="shrink-0" />
             <span>
-              Hay {noClasificados.length} listado(s) de Materia Prima con línea sin área asignada en el catálogo ({noClasificados.map((i) => i.lineaProduccion.codigo).join(', ')}). No se enviaron a ningún bloque para evitar clasificaciones erróneas.
+              Hay {noClasificados.length} listado(s) de Almacén MBC con línea sin área asignada en el catálogo ({noClasificados.map((i) => i.lineaProduccion.codigo).join(', ')}). No se enviaron a ningún bloque para evitar clasificaciones erróneas.
             </span>
           </div>
         </div>
@@ -716,7 +716,7 @@ export function ListadosPendientesPage(): ReactNode {
         isLoading={isLoading}
         page={pagination.page}
         limit={pagination.limit}
-        emptyMessage="No hay listados de Materia Prima pendientes."
+        emptyMessage="No hay listados de Almacén MBC pendientes."
         frentesPermitidos={null}
         isBotaDisabled={false}
         isAccesoriosDisabled={false}

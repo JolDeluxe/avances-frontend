@@ -101,49 +101,29 @@ export function LoginForm({
     }
   };
 
-  // Indicador visual de color para que funcione en TODOS los navegadores móviles y de escritorio
-  const getRoleBullet = (u: UsuarioLoginItem): string => {
-    const codigoRol = u.rol?.codigo?.toUpperCase();
-    if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
-      return '⚪'; // Gris / blanco tenue
-    }
-    switch (codigoRol) {
-      case 'ADMIN':
-        return '🔵'; // Azul
-      case 'AUDITOR':
-        return '🟣'; // Púrpura
-      case 'REGISTRADOR':
-        return '🟢'; // Verde
-      case 'ALMACENISTA':
-        return '🟠'; // Naranja / ámbar
-      default:
-        return '🔘';
-    }
-  };
-
   const getOptionStyle = (u: UsuarioLoginItem): { className: string; style?: React.CSSProperties } => {
     const codigoRol = u.rol?.codigo?.toUpperCase();
     if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
       return {
         className: 'text-gray-400 font-normal',
-        style: { color: '#9ca3af', backgroundColor: '#f9fafb' },
+        style: { color: '#9ca3af' },
       };
     }
     switch (codigoRol) {
       case 'ADMIN':
         return {
           className: 'text-blue-700 font-semibold',
-          style: { color: '#1d4ed8', fontWeight: 'bold' },
+          style: { color: '#1d4ed8' },
         };
       case 'AUDITOR':
         return {
           className: 'text-purple-700 font-semibold',
-          style: { color: '#7e22ce', fontWeight: 'bold' },
+          style: { color: '#7e22ce' },
         };
       case 'REGISTRADOR':
         return {
           className: 'text-emerald-700 font-semibold',
-          style: { color: '#047857', fontWeight: 'bold' },
+          style: { color: '#047857' },
         };
       case 'ALMACENISTA':
         return {
@@ -231,7 +211,6 @@ export function LoginForm({
             </option>
             {usuariosOrdenados.map((u) => {
               const opt = getOptionStyle(u);
-              const bullet = getRoleBullet(u);
               return (
                 <option
                   key={u.id}
@@ -239,7 +218,7 @@ export function LoginForm({
                   className={opt.className}
                   style={opt.style}
                 >
-                  {bullet} {u.nombre}
+                  {u.nombre}
                 </option>
               );
             })}

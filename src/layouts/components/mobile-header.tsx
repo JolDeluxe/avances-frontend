@@ -114,7 +114,7 @@ export function MobileHeader({ user, onLogout, showBurger = false }: MobileHeade
           >
             <img
               src="/img/01_Cuadra.webp"
-              alt="Materia Prima"
+              alt="Almacén MBC"
               className="h-9 sm:h-10 w-auto object-contain drop-shadow-xs"
             />
           </button>

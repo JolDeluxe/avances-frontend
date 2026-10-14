@@ -34,7 +34,7 @@ export function MobileSidebar({ navItems }: MobileSidebarProps) {
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0">
           <span className="fuente-titulos text-marca-primario text-lg tracking-wider uppercase font-bold">
-            Materia Prima
+            Almacén MBC
           </span>
           <button
             onClick={closeMobileMenu}
@@ -85,7 +85,7 @@ export function MobileSidebar({ navItems }: MobileSidebarProps) {
 
         <div className="p-4 border-t border-slate-100 shrink-0 text-center bg-slate-50">
           <p className="font-codigo text-[10px] text-slate-400 tracking-widest font-semibold uppercase">
-            Materia Prima
+            Almacén MBC
           </p>
         </div>
       </div>

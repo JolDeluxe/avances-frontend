@@ -20,9 +20,9 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api/],
       },
       manifest: {
-        name: 'Materia Prima MBC',
-        short_name: 'Materia Prima',
-        description: 'Gestión y control de Materia Prima MBC',
+        name: 'Almacén MBC',
+        short_name: 'Almacén MBC',
+        description: 'Gestión y control de Almacén MBC',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',

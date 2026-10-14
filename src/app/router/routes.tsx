@@ -7,6 +7,7 @@ import { ErrorPage } from '@/app/errors/error-page';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { RequireAuth, RedirectIfAuthenticated, RequirePermission, RequireRole } from './route-guards';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useAuthSession } from '@/app/providers/auth-provider';
 
 /**
  * Lazy loading por módulo/ruta para optimización de rendimiento y división de bundle (Code Splitting).
@@ -79,7 +80,13 @@ function withSuspense(component: ReactNode): ReactNode {
  * - En caso contrario, va a la vista general /listados/pendientes.
  */
 function ListadosIndexRedirect() {
-  const { canAny, rol } = usePermissions();
+  const { rol } = usePermissions();
+  const session = useAuthSession();
+
+  // Si es el usuario admin (Super Admin) o entra a la app, redirigir a /listados/pendientes directamente
+  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN') {
+    return <Navigate to={ROUTES.LISTADOS_PENDIENTES} replace />;
+  }
 
   if (rol === 'REGISTRADOR') {
     return <Navigate to={ROUTES.LISTADOS_ADMINISTRACION} replace />;
@@ -91,17 +98,6 @@ function ListadosIndexRedirect() {
 
   if (rol === 'ALMACENISTA') {
     return <Navigate to={ROUTES.LISTADOS_ALMACEN} replace />;
-  }
-
-  const canAdministrar = canAny(
-    PERMISOS.LISTADO_CREAR,
-    PERMISOS.LISTADO_EDITAR,
-    PERMISOS.LISTADO_CANCELAR,
-    PERMISOS.USUARIO_VER,
-  );
-
-  if (canAdministrar) {
-    return <Navigate to={ROUTES.LISTADOS_ADMINISTRACION} replace />;
   }
 
   return <Navigate to={ROUTES.LISTADOS_PENDIENTES} replace />;
