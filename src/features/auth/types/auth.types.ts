@@ -55,4 +55,6 @@ export interface UsuarioLoginItem {
   id: number;
   nombre: string;
   usuario: string;
+  rol?: { codigo: string };
 }
+

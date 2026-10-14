@@ -76,6 +76,76 @@ export function LoginForm({
     if (backendError && onClearError) onClearError();
   };
 
+  // Orden de precedencia por rol solicitado:
+  // 1. ADMIN
+  // 2. AUDITOR
+  // 3. REGISTRADOR
+  // 4. ALMACENISTA
+  // 5. SUPER_ADMIN (hasta el final)
+  const getRolPriority = (codigoRol?: string): number => {
+    switch (codigoRol) {
+      case 'ADMIN':
+        return 1;
+      case 'AUDITOR':
+        return 2;
+      case 'REGISTRADOR':
+        return 3;
+      case 'ALMACENISTA':
+        return 4;
+      case 'SUPER_ADMIN':
+        return 99; // Siempre al final
+      default:
+        return 10;
+    }
+  };
+
+  // Obtener estilo/color distintivo por rol (sin agregar texto del rol)
+  const getOptionStyle = (codigoRol?: string): { className: string; style?: React.CSSProperties } => {
+    switch (codigoRol) {
+      case 'ADMIN':
+        // Azul petróleo / sobrio elegante
+        return {
+          className: 'text-blue-700 font-semibold',
+          style: { color: '#1d4ed8', fontWeight: '600' },
+        };
+      case 'AUDITOR':
+        // Púrpura / auditoría
+        return {
+          className: 'text-purple-700 font-semibold',
+          style: { color: '#7e22ce', fontWeight: '600' },
+        };
+      case 'REGISTRADOR':
+        // Esmeralda / teal
+        return {
+          className: 'text-emerald-700 font-semibold',
+          style: { color: '#047857', fontWeight: '600' },
+        };
+      case 'ALMACENISTA':
+        // Ámbar / naranja de operaciones
+        return {
+          className: 'text-amber-700 font-medium',
+          style: { color: '#b45309', fontWeight: '500' },
+        };
+      case 'SUPER_ADMIN':
+        // Gris tenue para semi-ocultarlo pero manteniéndolo seleccionable
+        return {
+          className: 'text-gray-400 font-normal',
+          style: { color: '#9ca3af', fontWeight: '400', opacity: 0.75 },
+        };
+      default:
+        return {
+          className: 'text-gray-700',
+        };
+    }
+  };
+
+  const usuariosOrdenados = [...usuariosList].sort((a, b) => {
+    const pA = getRolPriority(a.rol?.codigo);
+    const pB = getRolPriority(b.rol?.codigo);
+    if (pA !== pB) return pA - pB;
+    return a.nombre.localeCompare(b.nombre, 'es');
+  });
+
   return (
     <div className="animate-in fade-in zoom-in-95 duration-300">
       <h2 className="fuente-titulos text-3xl font-bold mb-6 text-center text-brand-primary uppercase tracking-widest">
@@ -108,14 +178,22 @@ export function LoginForm({
             helperText={usuarioError ?? undefined}
             disabled={loading || loadingUsuarios}
           >
-            <option value="">
+            <option value="" className="text-gray-500">
               {loadingUsuarios ? 'Cargando usuarios...' : 'Selecciona tu nombre'}
             </option>
-            {usuariosList.map((u) => (
-              <option key={u.id} value={u.usuario}>
-                {u.nombre}
-              </option>
-            ))}
+            {usuariosOrdenados.map((u) => {
+              const opt = getOptionStyle(u.rol?.codigo);
+              return (
+                <option
+                  key={u.id}
+                  value={u.usuario}
+                  className={opt.className}
+                  style={opt.style}
+                >
+                  {u.nombre}
+                </option>
+              );
+            })}
           </Select>
         </div>
 
