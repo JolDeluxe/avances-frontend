@@ -82,7 +82,11 @@ export function LoginForm({
   // 3. REGISTRADOR
   // 4. ALMACENISTA
   // 5. SUPER_ADMIN (hasta el final)
-  const getRolPriority = (codigoRol?: string): number => {
+  const getRolPriority = (u: UsuarioLoginItem): number => {
+    const codigoRol = u.rol?.codigo?.toUpperCase();
+    if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
+      return 99; // Siempre al final
+    }
     switch (codigoRol) {
       case 'ADMIN':
         return 1;
@@ -92,15 +96,21 @@ export function LoginForm({
         return 3;
       case 'ALMACENISTA':
         return 4;
-      case 'SUPER_ADMIN':
-        return 99; // Siempre al final
       default:
         return 10;
     }
   };
 
   // Obtener estilo/color distintivo por rol (sin agregar texto del rol)
-  const getOptionStyle = (codigoRol?: string): { className: string; style?: React.CSSProperties } => {
+  const getOptionStyle = (u: UsuarioLoginItem): { className: string; style?: React.CSSProperties } => {
+    const codigoRol = u.rol?.codigo?.toUpperCase();
+    if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
+      // Gris tenue para semi-ocultarlo pero manteniéndolo seleccionable
+      return {
+        className: 'text-gray-400 font-normal',
+        style: { color: '#9ca3af', fontWeight: '400', opacity: 0.75 },
+      };
+    }
     switch (codigoRol) {
       case 'ADMIN':
         // Azul petróleo / sobrio elegante
@@ -126,12 +136,6 @@ export function LoginForm({
           className: 'text-amber-700 font-medium',
           style: { color: '#b45309', fontWeight: '500' },
         };
-      case 'SUPER_ADMIN':
-        // Gris tenue para semi-ocultarlo pero manteniéndolo seleccionable
-        return {
-          className: 'text-gray-400 font-normal',
-          style: { color: '#9ca3af', fontWeight: '400', opacity: 0.75 },
-        };
       default:
         return {
           className: 'text-gray-700',
@@ -140,8 +144,8 @@ export function LoginForm({
   };
 
   const usuariosOrdenados = [...usuariosList].sort((a, b) => {
-    const pA = getRolPriority(a.rol?.codigo);
-    const pB = getRolPriority(b.rol?.codigo);
+    const pA = getRolPriority(a);
+    const pB = getRolPriority(b);
     if (pA !== pB) return pA - pB;
     return a.nombre.localeCompare(b.nombre, 'es');
   });
@@ -212,7 +216,7 @@ export function LoginForm({
               {loadingUsuarios ? 'Cargando usuarios...' : 'Selecciona tu nombre'}
             </option>
             {usuariosOrdenados.map((u) => {
-              const opt = getOptionStyle(u.rol?.codigo);
+              const opt = getOptionStyle(u);
               return (
                 <option
                   key={u.id}
