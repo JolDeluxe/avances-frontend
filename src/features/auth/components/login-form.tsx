@@ -101,40 +101,54 @@ export function LoginForm({
     }
   };
 
-  // Obtener estilo/color distintivo por rol (sin agregar texto del rol)
+  // Indicador visual de color para que funcione en TODOS los navegadores móviles y de escritorio
+  const getRoleBullet = (u: UsuarioLoginItem): string => {
+    const codigoRol = u.rol?.codigo?.toUpperCase();
+    if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
+      return '⚪'; // Gris / blanco tenue
+    }
+    switch (codigoRol) {
+      case 'ADMIN':
+        return '🔵'; // Azul
+      case 'AUDITOR':
+        return '🟣'; // Púrpura
+      case 'REGISTRADOR':
+        return '🟢'; // Verde
+      case 'ALMACENISTA':
+        return '🟠'; // Naranja / ámbar
+      default:
+        return '🔘';
+    }
+  };
+
   const getOptionStyle = (u: UsuarioLoginItem): { className: string; style?: React.CSSProperties } => {
     const codigoRol = u.rol?.codigo?.toUpperCase();
     if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
-      // Gris tenue para semi-ocultarlo pero manteniéndolo seleccionable
       return {
         className: 'text-gray-400 font-normal',
-        style: { color: '#9ca3af', fontWeight: '400', opacity: 0.75 },
+        style: { color: '#9ca3af', backgroundColor: '#f9fafb' },
       };
     }
     switch (codigoRol) {
       case 'ADMIN':
-        // Azul petróleo / sobrio elegante
         return {
           className: 'text-blue-700 font-semibold',
-          style: { color: '#1d4ed8', fontWeight: '600' },
+          style: { color: '#1d4ed8', fontWeight: 'bold' },
         };
       case 'AUDITOR':
-        // Púrpura / auditoría
         return {
           className: 'text-purple-700 font-semibold',
-          style: { color: '#7e22ce', fontWeight: '600' },
+          style: { color: '#7e22ce', fontWeight: 'bold' },
         };
       case 'REGISTRADOR':
-        // Esmeralda / teal
         return {
           className: 'text-emerald-700 font-semibold',
-          style: { color: '#047857', fontWeight: '600' },
+          style: { color: '#047857', fontWeight: 'bold' },
         };
       case 'ALMACENISTA':
-        // Ámbar / naranja de operaciones
         return {
           className: 'text-amber-700 font-medium',
-          style: { color: '#b45309', fontWeight: '500' },
+          style: { color: '#b45309' },
         };
       default:
         return {
@@ -217,6 +231,7 @@ export function LoginForm({
             </option>
             {usuariosOrdenados.map((u) => {
               const opt = getOptionStyle(u);
+              const bullet = getRoleBullet(u);
               return (
                 <option
                   key={u.id}
@@ -224,7 +239,7 @@ export function LoginForm({
                   className={opt.className}
                   style={opt.style}
                 >
-                  {u.nombre}
+                  {bullet} {u.nombre}
                 </option>
               );
             })}
