@@ -30,7 +30,10 @@ export const ROUTES = {
   /** Submódulo: administración y consulta histórica */
   LISTADOS_ADMINISTRACION: '/listados/administracion',
 
-  /** Submódulo: operación de almacén (Separar / Entregar) */
+  /** Submódulo: operación exclusiva de almacén (Separar / Entregar por almacenistas) */
+  LISTADOS_ALMACEN: '/listados/almacen',
+
+  /** Submódulo: vista general de pendientes (para todos los roles, editable por ADMIN) */
   LISTADOS_PENDIENTES: '/listados/pendientes',
 
   /** Submódulo: auditoría y descuento en ERP (directos e indirectos) */
@@ -38,6 +41,13 @@ export const ROUTES = {
 
   /** Submódulo: historial de todos los estados */
   LISTADOS_HISTORIAL: '/listados/historial',
+
+  /** Módulo independiente: Tablero Monitor en Vivo de Listados Pendientes */
+  MONITOR_PENDIENTES: '/monitor-pendientes',
+
+  /** Módulo PROYECCIÓN (Pantallas de planta y monitores de proyección) */
+  PROYECCION: '/proyeccion',
+  PROYECCION_PENDIENTES: '/proyeccion/pendientes',
 
   /** Ruta catch-all para páginas no encontradas */
   NOT_FOUND: '*',

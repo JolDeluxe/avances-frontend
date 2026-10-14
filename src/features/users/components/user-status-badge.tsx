@@ -64,26 +64,6 @@ export function UserRoleBadge({ rolCodigo }: { rolCodigo?: string }): ReactNode 
     </span>
   );
 }
-
-function getSegmentChip(label: string, variant: 'sky' | 'indigo' | 'amber' | 'emerald' | 'slate'): ReactNode {
-  const styles: Record<string, string> = {
-    sky: 'bg-sky-50 text-sky-700 border-sky-200/90 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200/90 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200/90 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/90 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60',
-    slate: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-  };
-
-  return (
-    <span
-      key={label}
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${styles[variant]}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 export function UserSegmentacionBadge({
   tipoSurtidoAlmacen,
   tipoMaterialAuditor,
@@ -95,55 +75,65 @@ export function UserSegmentacionBadge({
 }): ReactNode {
   const code = (rolCodigo || '').toUpperCase();
 
-  if (code === 'ALMACENISTA' && tipoSurtidoAlmacen) {
-    const raw = tipoSurtidoAlmacen.trim().toUpperCase();
-    if (raw === 'TODOS') {
-      return getSegmentChip('Todos', 'emerald');
+  const getCleanLabels = (): string[] => {
+    if (code === 'ALMACENISTA' && tipoSurtidoAlmacen) {
+      const raw = tipoSurtidoAlmacen.trim().toUpperCase();
+      if (raw === 'TODOS') return ['Directos', 'Indirectos', 'Bolsas'];
+      return raw
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .map((seg) => {
+          if (seg === 'DIRECTOS') return 'Directos';
+          if (seg === 'INDIRECTOS') return 'Indirectos';
+          if (seg === 'BOLSAS') return 'Bolsas';
+          return seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase();
+        });
     }
 
-    const segments = raw.split(',').map((s) => s.trim()).filter(Boolean);
-    if (segments.length === 0) return <span className="text-text-muted text-sm">—</span>;
-
-    return (
-      <div className="inline-flex flex-wrap items-center gap-1.5">
-        {segments.map((seg) => {
-          if (seg === 'DIRECTOS') return getSegmentChip('Directos', 'sky');
-          if (seg === 'INDIRECTOS') return getSegmentChip('Indirectos', 'indigo');
-          if (seg === 'BOLSAS') return getSegmentChip('Bolsas', 'amber');
-          return getSegmentChip(seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase(), 'slate');
-        })}
-      </div>
-    );
-  }
-
-  if (code === 'AUDITOR' && tipoMaterialAuditor) {
-    const raw = tipoMaterialAuditor.trim().toUpperCase();
-    if (raw === 'TODOS') {
-      return getSegmentChip('Todos', 'emerald');
+    if (code === 'AUDITOR' && tipoMaterialAuditor) {
+      const raw = tipoMaterialAuditor.trim().toUpperCase();
+      if (raw === 'TODOS') return ['Directos', 'Indirectos', 'Bolsas'];
+      return raw
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .map((seg) => {
+          if (seg === 'DIRECTOS') return 'Directos';
+          if (seg === 'INDIRECTOS') return 'Indirectos';
+          if (seg === 'BOLSAS') return 'Bolsas';
+          return seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase();
+        });
     }
 
-    const segments = raw.split(',').map((s) => s.trim()).filter(Boolean);
-    if (segments.length === 0) return <span className="text-text-muted text-sm">—</span>;
+    if (code === 'SUPER_ADMIN' || code === 'ADMIN') {
+      return ['Acceso Total'];
+    }
 
-    return (
-      <div className="inline-flex flex-wrap items-center gap-1.5">
-        {segments.map((seg) => {
-          if (seg === 'DIRECTOS') return getSegmentChip('Directos', 'sky');
-          if (seg === 'INDIRECTOS') return getSegmentChip('Indirectos', 'indigo');
-          if (seg === 'BOLSAS') return getSegmentChip('Bolsas', 'amber');
-          return getSegmentChip(seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase(), 'slate');
-        })}
-      </div>
-    );
+    if (code === 'REGISTRADOR') {
+      return ['Captura y Registro'];
+    }
+
+    return [];
+  };
+
+  const labels = getCleanLabels();
+
+  if (labels.length === 0) {
+    return <span className="text-text-muted text-xs">—</span>;
   }
 
-  if (code === 'SUPER_ADMIN' || code === 'ADMIN') {
-    return getSegmentChip('Global', 'slate');
-  }
-
-  if (code === 'REGISTRADOR') {
-    return getSegmentChip('Listados', 'emerald');
-  }
-
-  return <span className="text-text-muted text-sm">—</span>;
+  return (
+    <ul className="space-y-0.5 py-1 text-xs">
+      {labels.map((lbl) => (
+        <li
+          key={lbl}
+          className="flex items-center gap-1.5 text-text-primary font-medium leading-tight"
+        >
+          <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+          <span>{lbl}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }

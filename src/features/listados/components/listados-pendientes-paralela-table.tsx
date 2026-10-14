@@ -17,11 +17,13 @@ export interface ListadoAccionesHandlers {
   onRetroceder?: (item: ListadoItem) => void;
   onSepararFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
   onEntregarFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
+  onDescontarFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
   onRetrocederFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
   onCancelar?: (item: ListadoItem) => void;
   mutatingRows?: Record<number, string | null>;
   canSeparar?: boolean;
   canEntregar?: boolean;
+  canDescontar?: boolean;
   canEditar?: boolean;
   canRetroceder?: boolean;
   canCancelar?: boolean;
@@ -39,6 +41,8 @@ interface ListadosParalelaTableProps {
   highlightedListadoId?: number | number[] | null;
   entregandoListadoId?: number | number[] | null;
   entregandoFrente?: TipoFrenteMaterial | null;
+  descontandoListadoId?: number | number[] | null;
+  descontandoFrente?: TipoFrenteMaterial | null;
   frentesPermitidos?: TipoFrenteMaterial[] | null;
   isBotaDisabled?: boolean;
   isAccesoriosDisabled?: boolean;
@@ -47,6 +51,8 @@ interface ListadosParalelaTableProps {
   selectedAccesoriosIds?: number[];
   onToggleSelectBota?: (id: number) => void;
   onToggleSelectAccesorios?: (id: number) => void;
+  hideActions?: boolean;
+  headerRight?: ReactNode;
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -212,6 +218,7 @@ function MenuAccionesFila({
   );
   const frentesPendientes = frentesPermitidosFiltrados.filter((f) => f.estado === 'PENDIENTE');
   const frentesSeparados = frentesPermitidosFiltrados.filter((f) => f.estado === 'SEPARADO');
+  const frentesEntregados = frentesPermitidosFiltrados.filter((f) => f.estado === 'ENTREGADO');
   const frentesParaRetroceder = frentesPermitidosFiltrados.filter(
     (f) => f.estado === 'SEPARADO' || f.estado === 'ENTREGADO',
   );
@@ -257,10 +264,10 @@ function MenuAccionesFila({
               <span>Ver detalles</span>
             </button>
 
-            {/* Editar listado (solo en PENDIENTE) */}
+            {/* Editar listado: ADMIN/SUPER_ADMIN pueden si no están todos en DESCONTADO ni cancelado/descontado; otros roles solo en PENDIENTE */}
             {acciones.canEditar &&
               acciones.onEditar &&
-              row.estado === 'PENDIENTE' && (
+              (acciones.canEditar ? (!frentes.every((f) => f.estado === 'DESCONTADO') && row.estado !== 'CANCELADO' && row.estado !== 'DESCONTADO') : row.estado === 'PENDIENTE') && (
                 <button
                   type="button"
                   onClick={() => {
@@ -307,6 +314,24 @@ function MenuAccionesFila({
                 >
                   <Icon name="arrow_forward" size="sm" className="text-emerald-600" />
                   <span>Entregar {TIPO_FRENTE_CONFIG[frente.tipoFrente].shortLabel}</span>
+                </button>
+              ))}
+
+            {/* Descontar en Sistema */}
+            {acciones.canDescontar &&
+              acciones.onDescontarFrente &&
+              frentesEntregados.map((frente) => (
+                <button
+                  key={`descontar-${frente.id}`}
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    acciones.onDescontarFrente!(row, frente.tipoFrente);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-purple-700 font-semibold hover:bg-purple-500/10 text-left transition-colors cursor-pointer text-[13px] rounded-md"
+                >
+                  <Icon name="done_all" size="sm" className="text-purple-600" />
+                  <span>Descontar {TIPO_FRENTE_CONFIG[frente.tipoFrente].shortLabel}</span>
                 </button>
               ))}
 
@@ -365,7 +390,43 @@ function MenuAccionesFila({
  * Columnas ACCESORIOS:
  * LINEA / MAQ | LISTA | FECHA | DIR | IND | BOL | [Acciones]
  */
-function renderColGroup(frentesCount: number, withSelection: boolean) {
+function renderColGroup(frentesCount: number, withSelection: boolean, hideActions: boolean = false) {
+  if (hideActions) {
+    if (!withSelection) {
+      if (frentesCount <= 1) {
+        return (
+          <colgroup>
+            <col className="w-[30%]" />
+            <col className="w-[44%]" />
+            <col className="w-[14%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+        );
+      }
+      if (frentesCount === 2) {
+        return (
+          <colgroup>
+            <col className="w-[28%]" />
+            <col className="w-[38%]" />
+            <col className="w-[14%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+          </colgroup>
+        );
+      }
+      return (
+        <colgroup>
+          <col className="w-[26%]" />
+          <col className="w-[34%]" />
+          <col className="w-[13%]" />
+          <col className="w-[9%]" />
+          <col className="w-[9%]" />
+          <col className="w-[9%]" />
+        </colgroup>
+      );
+    }
+  }
+
   if (!withSelection) {
     if (frentesCount <= 1) {
       return (
@@ -452,6 +513,8 @@ export function ListadosPendientesParalelaTable({
   highlightedListadoId,
   entregandoListadoId,
   entregandoFrente,
+  descontandoListadoId,
+  descontandoFrente,
   frentesPermitidos,
   isBotaDisabled = false,
   isAccesoriosDisabled = false,
@@ -460,6 +523,8 @@ export function ListadosPendientesParalelaTable({
   selectedAccesoriosIds = [],
   onToggleSelectBota,
   onToggleSelectAccesorios,
+  hideActions = false,
+  headerRight,
   pagination,
 }: ListadosParalelaTableProps): ReactNode {
   // Columnas operativas dinámicas según perfil del usuario
@@ -553,7 +618,7 @@ export function ListadosPendientesParalelaTable({
   return (
     <div className="w-full space-y-4">
       {/* ─── Barra Superior de Leyenda de Progreso (Discreta y compacta) ────────── */}
-      <div className="py-1.5 px-3 bg-app-surface/90 border border-border/80 rounded-lg shadow-2xs flex items-center justify-start text-[11px] text-text-muted">
+      <div className="py-1.5 px-3 bg-app-surface/90 border border-border/80 rounded-lg shadow-2xs flex items-center justify-between text-[11px] text-text-muted gap-3 flex-wrap">
         <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
           <span className="flex items-center gap-1 font-medium">
             <Icon name="more_horiz" size="14px" className="text-text-muted/70 shrink-0" />
@@ -572,6 +637,7 @@ export function ListadosPendientesParalelaTable({
             <span className="text-text-secondary">Descontado en Sistema</span>
           </span>
         </div>
+        {headerRight && <div className="flex items-center gap-2 shrink-0">{headerRight}</div>}
       </div>
 
       {/* ─── Tabla Unificada Fluida (BOTA a la Izquierda | ACCESORIOS a la Derecha) ──── */}
@@ -592,7 +658,7 @@ export function ListadosPendientesParalelaTable({
               </div>
 
               <table className="w-full table-fixed border-collapse text-left bg-app-surface">
-                {renderColGroup(botaFrentesVisibles.length, allowSelection)}
+                {renderColGroup(botaFrentesVisibles.length, allowSelection, hideActions)}
                 <thead>
                   <tr className="border-b border-border bg-app-surface text-text-secondary text-xs sm:text-sm font-bold uppercase tracking-wider">
                     {allowSelection && (
@@ -610,7 +676,7 @@ export function ListadosPendientesParalelaTable({
                         {TIPO_FRENTE_CONFIG[frenteKey].shortLabel}
                       </th>
                     ))}
-                    <th className="py-2.5 sm:py-3 px-1 text-center"></th>
+                    {!hideActions && <th className="py-2.5 sm:py-3 px-1 text-center"></th>}
                   </tr>
                 </thead>
                 <tbody className="bg-app-surface">
@@ -624,6 +690,9 @@ export function ListadosPendientesParalelaTable({
                       const isEntregando = Array.isArray(entregandoListadoId)
                         ? entregandoListadoId.includes(bota.id)
                         : entregandoListadoId === bota.id;
+                      const isDescontando = Array.isArray(descontandoListadoId)
+                        ? descontandoListadoId.includes(bota.id)
+                        : descontandoListadoId === bota.id;
                       const isSelected = allowSelection && selectedBotaIds.includes(bota.id);
 
                       return (
@@ -636,7 +705,9 @@ export function ListadosPendientesParalelaTable({
                           <tr
                             key={`bota-${bota.id}`}
                             className={`transition-colors h-9 sm:h-10 md:h-11 ${
-                              isEntregando
+                              isDescontando
+                                ? 'animate-descontar-success'
+                                : isEntregando
                                 ? 'animate-entregar-success'
                                 : isHighlighted
                                 ? 'animate-highlight-row'
@@ -684,7 +755,9 @@ export function ListadosPendientesParalelaTable({
                             {botaFrentesVisibles.map((frenteKey) => {
                               const f = frentes.find((item) => item.tipoFrente === frenteKey);
                               const estadoVisual =
-                                isEntregando && (!entregandoFrente || entregandoFrente === frenteKey)
+                                isDescontando && descontandoFrente === frenteKey
+                                  ? 'DESCONTADO'
+                                  : isEntregando && entregandoFrente === frenteKey
                                   ? 'ENTREGADO'
                                   : f?.estado;
                               return (
@@ -703,16 +776,18 @@ export function ListadosPendientesParalelaTable({
                             })}
 
                             {/* Acciones */}
-                            <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                              <MenuAccionesFila row={bota} acciones={acciones} frentesPermitidos={frentesPermitidos} />
-                            </td>
+                            {!hideActions && (
+                              <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
+                                <MenuAccionesFila row={bota} acciones={acciones} frentesPermitidos={frentesPermitidos} />
+                              </td>
+                            )}
                           </tr>
                         </Fragment>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4 + botaFrentesVisibles.length} className="py-10 text-center text-text-muted text-xs sm:text-sm">
+                      <td colSpan={(hideActions ? 3 : 4) + botaFrentesVisibles.length} className="py-10 text-center text-text-muted text-xs sm:text-sm">
                         Sin listados de BOTA
                       </td>
                     </tr>
@@ -735,7 +810,7 @@ export function ListadosPendientesParalelaTable({
               </div>
 
               <table className="w-full table-fixed border-collapse text-left bg-app-surface">
-                {renderColGroup(accesoriosFrentesVisibles.length, allowSelection)}
+                {renderColGroup(accesoriosFrentesVisibles.length, allowSelection, hideActions)}
                 <thead>
                   <tr className="border-b border-border bg-app-surface text-text-secondary text-xs sm:text-sm font-bold uppercase tracking-wider">
                     {allowSelection && (
@@ -753,7 +828,7 @@ export function ListadosPendientesParalelaTable({
                         {TIPO_FRENTE_CONFIG[frenteKey].shortLabel}
                       </th>
                     ))}
-                    <th className="py-2.5 sm:py-3 px-1 text-center"></th>
+                    {!hideActions && <th className="py-2.5 sm:py-3 px-1 text-center"></th>}
                   </tr>
                 </thead>
                 <tbody className="bg-app-surface">
@@ -767,6 +842,9 @@ export function ListadosPendientesParalelaTable({
                       const isEntregando = Array.isArray(entregandoListadoId)
                         ? entregandoListadoId.includes(acc.id)
                         : entregandoListadoId === acc.id;
+                      const isDescontando = Array.isArray(descontandoListadoId)
+                        ? descontandoListadoId.includes(acc.id)
+                        : descontandoListadoId === acc.id;
                       const isSelected = allowSelection && selectedAccesoriosIds.includes(acc.id);
 
                       return (
@@ -779,7 +857,9 @@ export function ListadosPendientesParalelaTable({
                           <tr
                             key={`acc-${acc.id}`}
                             className={`transition-colors h-9 sm:h-10 md:h-11 ${
-                              isEntregando
+                              isDescontando
+                                ? 'animate-descontar-success'
+                                : isEntregando
                                 ? 'animate-entregar-success'
                                 : isHighlighted
                                 ? 'animate-highlight-row'
@@ -827,7 +907,9 @@ export function ListadosPendientesParalelaTable({
                             {accesoriosFrentesVisibles.map((frenteKey) => {
                               const f = frentes.find((item) => item.tipoFrente === frenteKey);
                               const estadoVisual =
-                                isEntregando && (!entregandoFrente || entregandoFrente === frenteKey)
+                                isDescontando && descontandoFrente === frenteKey
+                                  ? 'DESCONTADO'
+                                  : isEntregando && entregandoFrente === frenteKey
                                   ? 'ENTREGADO'
                                   : f?.estado;
                               return (
@@ -846,16 +928,18 @@ export function ListadosPendientesParalelaTable({
                             })}
 
                             {/* Acciones */}
-                            <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                              <MenuAccionesFila row={acc} acciones={acciones} frentesPermitidos={frentesPermitidos} />
-                            </td>
+                            {!hideActions && (
+                              <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
+                               <MenuAccionesFila row={acc} acciones={acciones} frentesPermitidos={frentesPermitidos} />
+                              </td>
+                            )}
                           </tr>
                         </Fragment>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4 + accesoriosFrentesVisibles.length} className="py-10 text-center text-text-muted text-xs sm:text-sm">
+                      <td colSpan={(hideActions ? 3 : 4) + accesoriosFrentesVisibles.length} className="py-10 text-center text-text-muted text-xs sm:text-sm">
                         Sin listados de ACCESORIOS
                       </td>
                     </tr>

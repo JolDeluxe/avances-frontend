@@ -16,6 +16,8 @@ import type {
   LineaProduccionSimple,
 } from '../types/users.types';
 
+import { useAuth } from '@/features/auth/hooks/use-auth';
+
 export interface UserFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,10 +35,17 @@ export function UserFormModal({
   departamentos,
   onSuccess,
 }: UserFormModalProps): ReactNode {
+  const { currentUser } = useAuth();
+  const isSuperAdminUser = currentUser?.rol === 'SUPER_ADMIN';
+
+  // Si no es SUPER_ADMIN, excluir rigurosamente el rol SUPER_ADMIN de las opciones
+  const availableRoles = isSuperAdminUser
+    ? roles
+    : roles.filter((r) => r.codigo !== 'SUPER_ADMIN');
+
   const isEditing = Boolean(user);
 
   const [nombre, setNombre] = useState<string>('');
-  const [usuario, setUsuario] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [rolId, setRolId] = useState<number>(0);
   const [departamentoId, setDepartamentoId] = useState<number | undefined>(undefined);
@@ -53,7 +62,7 @@ export function UserFormModal({
     ? (departamentos.find((d) => d.id === departamentoId)?.lineasProduccion as any) || []
     : (departamentos.flatMap((d) => d.lineasProduccion || []) as any);
 
-  const selectedRole = roles.find((r) => r.id === rolId);
+  const selectedRole = availableRoles.find((r) => r.id === rolId);
   const isAlmacenista = selectedRole?.codigo === 'ALMACENISTA';
   const isAuditor = selectedRole?.codigo === 'AUDITOR';
 
@@ -62,7 +71,6 @@ export function UserFormModal({
     if (isOpen) {
       if (user) {
         setNombre(user.nombre);
-        setUsuario(user.usuario);
         setPassword('');
         setRolId(user.rol.id);
         setDepartamentoId(user.departamento?.id);
@@ -94,11 +102,15 @@ export function UserFormModal({
         );
       } else {
         setNombre('');
-        setUsuario('');
         setPassword('');
-        const defaultRol = roles[0];
+        // Seleccionar por defecto el primer rol permitido (no SUPER_ADMIN)
+        const defaultRol = availableRoles.find((r) => r.codigo !== 'SUPER_ADMIN') || availableRoles[0];
         setRolId(defaultRol?.id || 0);
-        setDepartamentoId(departamentos[0]?.id);
+
+        // Autoasignar departamento del usuario actual si no es SUPER_ADMIN o primer departamento
+        const defaultDeptoId = currentUser?.departamentoId || departamentos[0]?.id;
+        setDepartamentoId(defaultDeptoId);
+
         if (defaultRol?.codigo === 'ALMACENISTA') {
           setFrentesSurtido(['DIRECTOS']);
           setFrentesAuditor([]);
@@ -115,7 +127,7 @@ export function UserFormModal({
       setIsSubmitting(false);
       setError(null);
     }
-  }, [isOpen, user, roles, departamentos, availableLines]);
+  }, [isOpen, user?.id]);
 
   const handleRoleChange = (newRolId: number) => {
     setRolId(newRolId);
@@ -151,16 +163,6 @@ export function UserFormModal({
     setFrentesAuditor((prev) =>
       prev.includes(frente) ? prev.filter((f) => f !== frente) : [...prev, frente],
     );
-  };
-
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
-    let generated = '';
-    for (let i = 0; i < 12; i++) {
-      generated += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setPassword(generated);
-    setShowPassword(true);
   };
 
   const handleToggleLinea = (id: number) => {
@@ -218,7 +220,6 @@ export function UserFormModal({
       if (isEditing && user) {
         const payload: UpdateUserInput = {
           nombre: nombre.trim(),
-          usuario: usuario.trim(),
           rolId,
           departamentoId: departamentoId || undefined,
           tipoSurtidoAlmacen: tipoSurtidoCalculado,
@@ -240,7 +241,6 @@ export function UserFormModal({
       } else {
         const payload: CreateUserInput = {
           nombre: nombre.trim(),
-          usuario: usuario.trim(),
           password: password || undefined,
           rolId,
           departamentoId: departamentoId || undefined,
@@ -294,44 +294,14 @@ export function UserFormModal({
               autoComplete="off"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej. Juan Pérez González"
             />
           </div>
 
-          {/* Username */}
+          {/* Password (Optional on edit, mandatory on create) */}
           <div className="space-y-1.5">
-            <Label htmlFor="usuario">Usuario</Label>
-            <Input
-              id="usuario"
-              name="user_login_field"
-              type="text"
-              required
-              autoComplete="off"
-              value={usuario}
-              onChange={(e) => setUsuario(e.target.value.toLowerCase().trim())}
-              placeholder="ej. jperez"
-              className="font-mono"
-            />
-            <p className="text-2xs text-text-muted">
-              Identificador único para iniciar sesión. Solo letras minúsculas, números o guiones.
-            </p>
-          </div>
-
-          {/* Password (Optional on edit, mandatory or auto on create) */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">
-                {isEditing ? 'Contraseña (dejar en blanco para conservar)' : 'Contraseña'}
-              </Label>
-              <button
-                type="button"
-                onClick={generatePassword}
-                className="text-xs text-marca-primario hover:underline font-medium flex items-center gap-1 transition-colors"
-              >
-                <Icon name="casino" size="xs" />
-                Generar segura
-              </button>
-            </div>
+            <Label htmlFor="password">
+              {isEditing ? 'Contraseña (dejar en blanco para conservar)' : 'Contraseña'}
+            </Label>
 
             <div className="relative">
               <Input
@@ -365,33 +335,45 @@ export function UserFormModal({
                 onChange={(e) => handleRoleChange(Number(e.target.value))}
                 required
               >
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.nombre}
-                  </option>
-                ))}
+                {roles.map((r) => {
+                  let label = r.nombre;
+                  if (r.codigo === 'ADMIN') label = 'Administrador';
+                  else if (r.codigo === 'REGISTRADOR') label = 'Registrador de Listados';
+                  else if (r.codigo === 'ALMACENISTA') label = 'Almacenistas';
+                  else if (r.codigo === 'AUDITOR') label = 'Auditor';
+                  else if (r.codigo === 'SUPER_ADMIN') label = 'Super Admin';
+
+                  return (
+                    <option key={r.id} value={r.id}>
+                      {label}
+                    </option>
+                  );
+                })}
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="departamento">Departamento</Label>
-              <Select
-                id="departamento"
-                value={departamentoId || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDepartamentoId(val ? Number(val) : undefined);
-                }}
-                required
-              >
-                <option value="">Seleccionar departamento...</option>
-                {departamentos.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {/* Departamento solo se muestra si el usuario logueado es SUPER_ADMIN */}
+            {isSuperAdminUser && (
+              <div className="space-y-1.5">
+                <Label htmlFor="departamento">Departamento</Label>
+                <Select
+                  id="departamento"
+                  value={departamentoId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDepartamentoId(val ? Number(val) : undefined);
+                  }}
+                  required
+                >
+                  <option value="">Seleccionar departamento...</option>
+                  {departamentos.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nombre}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Segmentación para ALMACENISTA */}

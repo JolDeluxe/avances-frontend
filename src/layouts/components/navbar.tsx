@@ -23,7 +23,7 @@ const SYSTEM_ROUTES = [
  */
 export function Navbar({ navItems, user, onLogout }: NavbarProps) {
   const location = useLocation();
-  const { toggleMobileMenu, sidebarExpanded } = useLayoutUI();
+  const { sidebarExpanded } = useLayoutUI();
   const navRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -62,24 +62,16 @@ export function Navbar({ navItems, user, onLogout }: NavbarProps) {
     >
       <div className="grid grid-cols-3 items-center px-4 py-2.5 sm:py-3 gap-4">
 
-        {/* LEFT — botón hamburguesa móvil + módulo activo */}
-        <div className="flex items-center gap-4 justify-self-start">
-          <button
-            onClick={toggleMobileMenu}
-            className="p-2 rounded-md hover:bg-slate-100 transition-colors lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca-secundario/30 cursor-pointer"
-            aria-label="Abrir menú"
-          >
-            <Icon name="menu" size="24px" className="text-marca-primario" />
-          </button>
-
+        {/* LEFT — botón toggle sidebar + módulo activo */}
+        <div className="flex items-center gap-3 justify-self-start min-w-0">
           {activeModule && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Icon
                 name={activeModule.icon}
-                size={!sidebarExpanded ? '32px' : '24px'}
-                className="text-marca-acento hidden sm:block transition-all duration-300"
+                size={!sidebarExpanded ? '28px' : '22px'}
+                className="text-marca-acento shrink-0 transition-all duration-300"
               />
-              <h1 className={`fuente-titulos text-marca-primario uppercase hidden md:block transition-all duration-300 ${!sidebarExpanded ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg'}`}>
+              <h1 className={`fuente-titulos text-marca-primario uppercase truncate transition-all duration-300 ${!sidebarExpanded ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'}`}>
                 {activeModule.name}
               </h1>
             </div>

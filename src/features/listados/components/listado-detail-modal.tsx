@@ -8,7 +8,6 @@ import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import { PERMISOS } from '@/config/permissions';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { listadosApi } from '../api/listados-api';
-import { ListadoAccionModal } from './listado-accion-modal';
 import type { ListadoItem, TipoFrenteMaterial } from '../types/listados.types';
 
 export interface ListadoDetailModalProps {
@@ -17,7 +16,8 @@ export interface ListadoDetailModalProps {
   listado: ListadoItem | null;
   onEdit?: (listado: ListadoItem) => void;
   onRequestRetroceder?: (listado: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
-  onListadoUpdated?: (listado: ListadoItem) => void;
+  onRequestCancelar?: (listado: ListadoItem) => void;
+  onListadoUpdated?: (listado: ListadoItem, meta?: { accion?: 'separar' | 'entregar' | 'descontar'; tipoFrente?: TipoFrenteMaterial }) => void;
   allowSeparar?: boolean;
 }
 
@@ -36,17 +36,26 @@ function formatTimestamp(isoStr: string): string {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return isoStr;
+
     const dia = d.toLocaleDateString('es-MX', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
+
+    // Si viene de script histórico o campo Date puro (medianoche UTC 00:00:00), no mostrar hora artificial
+    const isMidnightUtc = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+    if (isMidnightUtc) {
+      return dia;
+    }
+
     const hora = d.toLocaleTimeString('es-MX', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
     });
-    return `${dia} ${hora}`;
+    // Evitar que 'p. m.' o 'a. m.' se parta en otra línea usando espacio no divisible
+    return `${dia} ${hora.replace(/\s+/g, '\u00A0')}`;
   } catch {
     return isoStr;
   }
@@ -58,6 +67,7 @@ export function ListadoDetailModal({
   listado,
   onEdit,
   onRequestRetroceder,
+  onRequestCancelar,
   onListadoUpdated,
   allowSeparar = true,
 }: ListadoDetailModalProps): ReactNode {
@@ -68,7 +78,10 @@ export function ListadoDetailModal({
   const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
   const [operatingFrente, setOperatingFrente] = useState<TipoFrenteMaterial | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [confirmDescontarFrente, setConfirmDescontarFrente] = useState<TipoFrenteMaterial | null>(null);
+  const [confirmInlineAction, setConfirmInlineAction] = useState<{
+    tipoFrente: TipoFrenteMaterial;
+    accion: 'separar' | 'entregar' | 'descontar';
+  } | null>(null);
 
   // Cargar detalle completo (con frentes e historialEstados) al abrir
   useEffect(() => {
@@ -77,6 +90,7 @@ export function ListadoDetailModal({
       setErrorDetalle(null);
       setOperatingFrente(null);
       setFeedback(null);
+      setConfirmInlineAction(null);
       return;
     }
 
@@ -116,13 +130,32 @@ export function ListadoDetailModal({
   if (!listado) return null;
 
   const data = detalle ?? listado;
-  const canEdit = data.estado === 'PENDIENTE';
+
+  // Verificación de si todos los frentes están completos en DESCONTADO
+  const frentesActuales = data.frentes ?? [];
+  const todosFrentesDescontados =
+    frentesActuales.length > 0 &&
+    frentesActuales.every((f) => f.estado === 'DESCONTADO');
+
+  // ADMIN y SUPER_ADMIN pueden editar siempre que no estén todos los frentes descontados ni cancelado/descontado
+  const canEdit = (isSuperAdmin || isAdmin)
+    ? (!todosFrentesDescontados && (data.estado as string) !== 'CANCELADO' && (data.estado as string) !== 'DESCONTADO')
+    : data.estado === 'PENDIENTE';
+
+  // ADMIN y SUPER_ADMIN pueden cancelar siempre que no estén todos los frentes descontados ni cancelado/descontado
+  const canCancelarListado =
+    onRequestCancelar &&
+    (isSuperAdmin || isAdmin || can(PERMISOS.LISTADO_CANCELAR)) &&
+    (data.estado as string) !== 'CANCELADO' &&
+    (data.estado as string) !== 'DESCONTADO' &&
+    !todosFrentesDescontados;
 
   // Permisos efectivos para operaciones de listados
-  const canSeparar = allowSeparar && can(PERMISOS.LISTADO_SEPARAR);
-  const canEntregar = can(PERMISOS.LISTADO_ENTREGAR);
-  const canRetroceder = (isSuperAdmin || isAdmin) && can(PERMISOS.LISTADO_RETROCEDER);
-  const canDescontar = can(PERMISOS.LISTADO_DESCONTAR);
+  // ADMIN y SUPER_ADMIN siempre pueden operar cualquier frente (Separar, Entregar, Descontar, Retroceder)
+  const canSeparar = (isSuperAdmin || isAdmin) ? true : (Boolean(allowSeparar) && can(PERMISOS.LISTADO_SEPARAR));
+  const canEntregar = (isSuperAdmin || isAdmin) ? true : can(PERMISOS.LISTADO_ENTREGAR);
+  const canRetroceder = (isSuperAdmin || isAdmin) || can(PERMISOS.LISTADO_RETROCEDER);
+  const canDescontar = (isSuperAdmin || isAdmin) || can(PERMISOS.LISTADO_DESCONTAR);
 
   // Validador de asignación operativa para el usuario autenticado
   const puedeOperarFrente = (tipoFrente: TipoFrenteMaterial): boolean => {
@@ -150,13 +183,13 @@ export function ListadoDetailModal({
         setDetalle(res.data);
         setFeedback({
           type: 'success',
-          message: `Frente ${TIPO_FRENTE_CONFIG[tipoFrente].shortLabel} separado correctamente.`,
+          message: `${TIPO_FRENTE_CONFIG[tipoFrente].nombre} separados correctamente.`,
         });
-        onListadoUpdated?.(res.data);
+        onListadoUpdated?.(res.data, { accion: 'separar', tipoFrente });
       } else {
         setFeedback({
           type: 'error',
-          message: res.message || `Error al separar el frente ${tipoFrente}.`,
+          message: res.message || `Error al separar ${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente}.`,
         });
       }
     } catch (err: unknown) {
@@ -176,13 +209,13 @@ export function ListadoDetailModal({
         setDetalle(res.data);
         setFeedback({
           type: 'success',
-          message: `Frente ${TIPO_FRENTE_CONFIG[tipoFrente].shortLabel} entregado a producción.`,
+          message: `${TIPO_FRENTE_CONFIG[tipoFrente].nombre} entregados a producción.`,
         });
-        onListadoUpdated?.(res.data);
+        onListadoUpdated?.(res.data, { accion: 'entregar', tipoFrente });
       } else {
         setFeedback({
           type: 'error',
-          message: res.message || `Error al entregar el frente ${tipoFrente}.`,
+          message: res.message || `Error al entregar ${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente}.`,
         });
       }
     } catch (err: unknown) {
@@ -193,13 +226,7 @@ export function ListadoDetailModal({
     }
   };
 
-  const handleRequestDescontarFrente = (tipoFrente: TipoFrenteMaterial) => {
-    setConfirmDescontarFrente(tipoFrente);
-  };
-
-  const handleConfirmDescontarAction = async () => {
-    if (!confirmDescontarFrente) return;
-    const tipoFrente = confirmDescontarFrente;
+  const handleDescontarFrente = async (tipoFrente: TipoFrenteMaterial) => {
     setOperatingFrente(tipoFrente);
     setFeedback(null);
     try {
@@ -210,8 +237,7 @@ export function ListadoDetailModal({
           type: 'success',
           message: `${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente} descontado en sistema.`,
         });
-        setConfirmDescontarFrente(null);
-        onListadoUpdated?.(res.data);
+        onListadoUpdated?.(res.data, { accion: 'descontar', tipoFrente });
       } else {
         setFeedback({
           type: 'error',
@@ -272,16 +298,14 @@ export function ListadoDetailModal({
               )}
               <span className="text-border">•</span>
               <span>{data.departamento?.nombre || 'Sin depto'}</span>
-              <span className="text-border">•</span>
-              <span>Registrado por {data.creadoPorUsuario?.nombre || data.creadoPorUsuario?.usuario || 'Sistema'}</span>
             </div>
           </div>
 
-          <div className="sm:text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50">
-            <span className="text-2xs uppercase tracking-wider text-text-muted font-medium block">
+          <div className="sm:text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50 text-xs">
+            <span className="text-3xs uppercase tracking-wider text-text-muted font-medium block">
               Fecha requerida
             </span>
-            <span className="text-sm font-bold text-text-primary">
+            <span className="font-medium text-text-secondary">
               {formatFechaLocal(data.fechaRequerida)}
             </span>
           </div>
@@ -347,6 +371,10 @@ export function ListadoDetailModal({
                     className={`p-3 rounded-xl border shadow-2xs flex flex-col justify-between space-y-2.5 transition-colors ${
                       frente.estado === 'DESCONTADO'
                         ? 'border-purple-200 dark:border-purple-800/40 bg-purple-50/30 dark:bg-purple-950/10'
+                        : frente.estado === 'ENTREGADO'
+                        ? 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/10'
+                        : frente.estado === 'SEPARADO'
+                        ? 'border-amber-200 dark:border-amber-800/40 bg-amber-50/30 dark:bg-amber-950/10'
                         : 'border-border bg-app-surface'
                     }`}
                   >
@@ -358,24 +386,42 @@ export function ListadoDetailModal({
                       <FrenteStatusBadge estado={frente.estado} />
                     </div>
 
-                    {/* Trazabilidad Discreta y Compacta (3 micro-columnas) */}
-                    <div className="grid grid-cols-3 gap-1.5 py-1.5 px-2 rounded-lg bg-app-surface-muted/60 border border-border/50 text-[11px]">
-                      <div className="min-w-0">
-                        <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">
+                    {/* Trazabilidad: 3 columnas optimizadas para que fecha y hora se lean completas sin cortarse */}
+                    <div className="grid grid-cols-3 gap-2 py-2 px-2.5 rounded-lg bg-app-surface-muted/60 border border-border/50 text-[11px]">
+                      {/* 1. SEPARADO (Naranja cuando es el estado actual) */}
+                      <div className="min-w-0 flex flex-col">
+                        <span
+                          className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${
+                            frente.estado === 'SEPARADO'
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-text-muted'
+                          }`}
+                        >
                           Separado
                         </span>
                         {frente.fechaSeparado ? (
                           <div
-                            className="truncate"
                             title={`${formatTimestamp(frente.fechaSeparado)}${
                               frente.separadoPor ? ` - ${frente.separadoPor.nombre || frente.separadoPor.usuario}` : ''
                             }`}
                           >
-                            <span className="font-semibold text-text-primary text-[10px] sm:text-[11px] block truncate">
+                            <span
+                              className={`text-[10px] leading-tight block ${
+                                frente.estado === 'SEPARADO'
+                                  ? 'font-bold text-amber-700 dark:text-amber-300'
+                                  : 'font-semibold text-text-primary'
+                              }`}
+                            >
                               {formatTimestamp(frente.fechaSeparado)}
                             </span>
                             {frente.separadoPor && (
-                              <span className="text-[9px] text-text-muted truncate block">
+                              <span
+                                className={`text-[9px] truncate block mt-0.5 ${
+                                  frente.estado === 'SEPARADO'
+                                    ? 'text-amber-700/80 dark:text-amber-400/80'
+                                    : 'text-text-muted'
+                                }`}
+                              >
                                 {frente.separadoPor.nombre || frente.separadoPor.usuario}
                               </span>
                             )}
@@ -385,22 +431,44 @@ export function ListadoDetailModal({
                         )}
                       </div>
 
-                      <div className="min-w-0 border-l border-border/50 pl-1.5">
-                        <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">
+                      {/* 2. ENTREGADO (Verde cuando es el estado actual) */}
+                      <div
+                        className={`min-w-0 border-l pl-2 flex flex-col ${
+                          frente.estado === 'ENTREGADO' ? 'border-emerald-200 dark:border-emerald-800/50' : 'border-border/50'
+                        }`}
+                      >
+                        <span
+                          className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${
+                            frente.estado === 'ENTREGADO'
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-text-muted'
+                          }`}
+                        >
                           Entregado
                         </span>
                         {frente.fechaEntregado ? (
                           <div
-                            className="truncate"
                             title={`${formatTimestamp(frente.fechaEntregado)}${
                               frente.entregadoPor ? ` - ${frente.entregadoPor.nombre || frente.entregadoPor.usuario}` : ''
                             }`}
                           >
-                            <span className="font-semibold text-text-primary text-[10px] sm:text-[11px] block truncate">
+                            <span
+                              className={`text-[10px] leading-tight block ${
+                                frente.estado === 'ENTREGADO'
+                                  ? 'font-bold text-emerald-700 dark:text-emerald-300'
+                                  : 'font-semibold text-text-primary'
+                              }`}
+                            >
                               {formatTimestamp(frente.fechaEntregado)}
                             </span>
                             {frente.entregadoPor && (
-                              <span className="text-[9px] text-text-muted truncate block">
+                              <span
+                                className={`text-[9px] truncate block mt-0.5 ${
+                                  frente.estado === 'ENTREGADO'
+                                    ? 'text-emerald-700/80 dark:text-emerald-400/80'
+                                    : 'text-text-muted'
+                                }`}
+                              >
                                 {frente.entregadoPor.nombre || frente.entregadoPor.usuario}
                               </span>
                             )}
@@ -410,22 +478,44 @@ export function ListadoDetailModal({
                         )}
                       </div>
 
-                      <div className={`min-w-0 border-l pl-1.5 ${frente.estado === 'DESCONTADO' ? 'border-purple-200' : 'border-border/50'}`}>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider block ${frente.estado === 'DESCONTADO' ? 'text-purple-700 dark:text-purple-400' : 'text-text-muted'}`}>
+                      {/* 3. DESCONTADO (Morado cuando es el estado actual) */}
+                      <div
+                        className={`min-w-0 border-l pl-2 flex flex-col ${
+                          frente.estado === 'DESCONTADO' ? 'border-purple-200 dark:border-purple-800/50' : 'border-border/50'
+                        }`}
+                      >
+                        <span
+                          className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${
+                            frente.estado === 'DESCONTADO'
+                              ? 'text-purple-700 dark:text-purple-400'
+                              : 'text-text-muted'
+                          }`}
+                        >
                           Descontado
                         </span>
                         {frente.fechaDescontado ? (
                           <div
-                            className="truncate"
                             title={`${formatTimestamp(frente.fechaDescontado)}${
                               frente.descontadoPor ? ` - ${frente.descontadoPor.nombre || frente.descontadoPor.usuario}` : ''
                             }`}
                           >
-                            <span className="font-semibold text-purple-700 dark:text-purple-300 text-[10px] sm:text-[11px] block truncate">
+                            <span
+                              className={`text-[10px] leading-tight block ${
+                                frente.estado === 'DESCONTADO'
+                                  ? 'font-bold text-purple-700 dark:text-purple-300'
+                                  : 'font-semibold text-text-primary'
+                              }`}
+                            >
                               {formatTimestamp(frente.fechaDescontado)}
                             </span>
                             {frente.descontadoPor && (
-                              <span className="text-[9px] text-purple-600/80 dark:text-purple-400/80 truncate block">
+                              <span
+                                className={`text-[9px] truncate block mt-0.5 ${
+                                  frente.estado === 'DESCONTADO'
+                                    ? 'text-purple-600/80 dark:text-purple-400/80'
+                                    : 'text-text-muted'
+                                }`}
+                              >
                                 {frente.descontadoPor.nombre || frente.descontadoPor.usuario}
                               </span>
                             )}
@@ -445,64 +535,145 @@ export function ListadoDetailModal({
                         </div>
                       ) : (
                         <>
+                          {/* SEPARAR */}
                           {frente.estado === 'PENDIENTE' && canSeparar && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="accion"
-                              disabled={!userCanOperateThis}
-                              onClick={() => handleSepararFrente(frente.tipoFrente)}
-                              className="w-full text-xs h-8"
-                            >
-                              <Icon name="inventory_2" size="xs" className="mr-1" />
-                              Separar
-                            </Button>
+                            confirmInlineAction?.tipoFrente === frente.tipoFrente &&
+                            confirmInlineAction.accion === 'separar' ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmInlineAction(null);
+                                    handleSepararFrente(frente.tipoFrente);
+                                  }}
+                                  className="flex-1 text-xs h-8 inline-flex items-center justify-center gap-1 rounded-lg font-bold bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <Icon name="check" size="xs" />
+                                  <span>¿Confirmar separar?</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmInlineAction(null)}
+                                  className="h-8 px-2.5 inline-flex items-center justify-center rounded-lg border border-border bg-app-surface hover:bg-app-surface-muted text-text-secondary text-xs transition-colors cursor-pointer"
+                                  title="Cancelar"
+                                >
+                                  <Icon name="close" size="xs" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!userCanOperateThis}
+                                onClick={() =>
+                                  setConfirmInlineAction({
+                                    tipoFrente: frente.tipoFrente,
+                                    accion: 'separar',
+                                  })
+                                }
+                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs transition-colors cursor-pointer"
+                              >
+                                <span>Separar</span>
+                                <Icon name="arrow_forward" size="xs" />
+                              </button>
+                            )
                           )}
 
+                          {/* ENTREGAR A PRODUCCIÓN */}
                           {frente.estado === 'SEPARADO' && canEntregar && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="success"
-                              disabled={!userCanOperateThis}
-                              onClick={() => handleEntregarFrente(frente.tipoFrente)}
-                              className="w-full text-xs h-8"
-                            >
-                              <Icon name="local_shipping" size="xs" className="mr-1" />
-                              Entregar a Prod.
-                            </Button>
+                            confirmInlineAction?.tipoFrente === frente.tipoFrente &&
+                            confirmInlineAction.accion === 'entregar' ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmInlineAction(null);
+                                    handleEntregarFrente(frente.tipoFrente);
+                                  }}
+                                  className="flex-1 text-xs h-8 inline-flex items-center justify-center gap-1 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <Icon name="check" size="xs" />
+                                  <span>¿Confirmar entrega?</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmInlineAction(null)}
+                                  className="h-8 px-2.5 inline-flex items-center justify-center rounded-lg border border-border bg-app-surface hover:bg-app-surface-muted text-text-secondary text-xs transition-colors cursor-pointer"
+                                  title="Cancelar"
+                                >
+                                  <Icon name="close" size="xs" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!userCanOperateThis}
+                                onClick={() =>
+                                  setConfirmInlineAction({
+                                    tipoFrente: frente.tipoFrente,
+                                    accion: 'entregar',
+                                  })
+                                }
+                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs transition-colors cursor-pointer"
+                              >
+                                <span>Entregar a Prod.</span>
+                                <Icon name="arrow_forward" size="xs" />
+                              </button>
+                            )
                           )}
 
+                          {/* DESCONTAR EN SISTEMA */}
                           {frente.estado === 'ENTREGADO' && canDescontar && (
-                            <button
-                              type="button"
-                              onClick={() => handleRequestDescontarFrente(frente.tipoFrente)}
-                              className="w-full text-xs h-8 inline-flex items-center justify-center rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white shadow-xs transition-colors cursor-pointer"
-                            >
-                              <Icon name="done_all" size="xs" className="mr-1" />
-                              Descontar en Sistema
-                            </button>
+                            confirmInlineAction?.tipoFrente === frente.tipoFrente &&
+                            confirmInlineAction.accion === 'descontar' ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmInlineAction(null);
+                                    handleDescontarFrente(frente.tipoFrente);
+                                  }}
+                                  className="flex-1 text-xs h-8 inline-flex items-center justify-center gap-1 rounded-lg font-bold bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <Icon name="check" size="xs" />
+                                  <span>¿Confirmar descuento?</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmInlineAction(null)}
+                                  className="h-8 px-2.5 inline-flex items-center justify-center rounded-lg border border-border bg-app-surface hover:bg-app-surface-muted text-text-secondary text-xs transition-colors cursor-pointer"
+                                  title="Cancelar"
+                                >
+                                  <Icon name="close" size="xs" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setConfirmInlineAction({
+                                    tipoFrente: frente.tipoFrente,
+                                    accion: 'descontar',
+                                  })
+                                }
+                                className="w-full text-xs h-8 inline-flex items-center justify-center rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Icon name="done_all" size="xs" className="mr-1" />
+                                Descontar en Sistema
+                              </button>
+                            )
                           )}
 
                           {(frente.estado === 'SEPARADO' || frente.estado === 'ENTREGADO') &&
                             canRetroceder && (
-                              <Button
+                              <button
                                 type="button"
-                                size="sm"
-                                variant="outline"
                                 onClick={() => handleRetrocederFrente(frente.tipoFrente)}
-                                className="w-full text-2xs h-7 text-warning-text hover:bg-warning-subtle"
+                                className="w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted hover:text-warning-text hover:bg-warning/10 py-1 px-2 rounded-md transition-colors cursor-pointer"
                               >
-                                <Icon name="undo" size="xs" className="mr-1" />
-                                Retroceder
-                              </Button>
+                                <Icon name="undo" size="xs" className="opacity-70" />
+                                <span>Retroceder</span>
+                              </button>
                             )}
-
-                          {frente.estado === 'DESCONTADO' && (
-                            <div className="text-center text-3xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 py-1.5 bg-purple-100/60 dark:bg-purple-900/30 rounded-lg border border-purple-200 dark:border-purple-800">
-                              ✓ Descontado en Sistema
-                            </div>
-                          )}
                         </>
                       )}
                     </div>
@@ -515,9 +686,25 @@ export function ListadoDetailModal({
       </ModalBody>
 
       <ModalFooter className="flex items-center justify-between p-4 sm:p-5 border-t border-border bg-app-surface-muted/30">
-        <Button type="button" variant="cancelar" onClick={onClose} className="h-9 text-xs">
-          Cerrar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="cancelar" onClick={onClose} className="h-9 text-xs">
+            Cerrar
+          </Button>
+          {canCancelarListado && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onClose();
+                onRequestCancelar?.(data);
+              }}
+              className="h-9 text-xs text-danger border-danger/40 hover:bg-danger/10 hover:border-danger/60"
+            >
+              <Icon name="block" size="xs" className="mr-1.5" />
+              Cancelar Listado
+            </Button>
+          )}
+        </div>
         {canEdit && onEdit && (
           <Button
             type="button"
@@ -533,19 +720,6 @@ export function ListadoDetailModal({
           </Button>
         )}
       </ModalFooter>
-
-      {/* Modal de confirmación para Descontar en Sistema */}
-      {confirmDescontarFrente && (
-        <ListadoAccionModal
-          isOpen={Boolean(confirmDescontarFrente)}
-          onClose={() => setConfirmDescontarFrente(null)}
-          listado={data}
-          tipoFrente={confirmDescontarFrente}
-          accion="descontar"
-          onConfirm={handleConfirmDescontarAction}
-          isSubmitting={operatingFrente === confirmDescontarFrente}
-        />
-      )}
     </Modal>
   );
 }

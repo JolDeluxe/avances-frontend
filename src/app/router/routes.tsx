@@ -28,6 +28,11 @@ const ListadosPendientesPage = lazy(() =>
     default: m.ListadosPendientesPage,
   })),
 );
+const ListadosAlmacenPage = lazy(() =>
+  import('@/features/listados/pages/almacen/listados-almacen-page').then((m) => ({
+    default: m.ListadosAlmacenPage,
+  })),
+);
 const ListadosAuditoriaPage = lazy(() =>
   import('@/features/listados/pages/auditoria/listados-auditoria-page').then((m) => ({
     default: m.ListadosAuditoriaPage,
@@ -36,6 +41,16 @@ const ListadosAuditoriaPage = lazy(() =>
 const ListadosHistorialPage = lazy(() =>
   import('@/features/listados/pages/historial/listados-historial-page').then((m) => ({
     default: m.ListadosHistorialPage,
+  })),
+);
+const MonitorPendientesPage = lazy(() =>
+  import('@/features/listados/pages/monitor/monitor-pendientes-page').then((m) => ({
+    default: m.MonitorPendientesPage,
+  })),
+);
+const ProyeccionPendientesPage = lazy(() =>
+  import('@/features/listados/pages/monitor/proyeccion-pendientes-page').then((m) => ({
+    default: m.ProyeccionPendientesPage,
   })),
 );
 
@@ -57,9 +72,11 @@ function withSuspense(component: ReactNode): ReactNode {
 
 /**
  * Componente de redirección de índice para el módulo Listados.
+ * - Si es REGISTRADOR, va a /listados/administracion.
  * - Si es AUDITOR (sin crear/editar), va directamente a /listados/auditoria.
+ * - Si es ALMACENISTA, va directamente a su tablero operativo /listados/almacen.
  * - Si cuenta con capacidades administrativas de listado, se dirige a /listados/administracion.
- * - En caso contrario (ej. ALMACENISTA), va directamente al tablero operativo /listados/pendientes.
+ * - En caso contrario, va a la vista general /listados/pendientes.
  */
 function ListadosIndexRedirect() {
   const { canAny, rol } = usePermissions();
@@ -70,6 +87,10 @@ function ListadosIndexRedirect() {
 
   if (rol === 'AUDITOR') {
     return <Navigate to={ROUTES.LISTADOS_AUDITORIA} replace />;
+  }
+
+  if (rol === 'ALMACENISTA') {
+    return <Navigate to={ROUTES.LISTADOS_ALMACEN} replace />;
   }
 
   const canAdministrar = canAny(
@@ -153,6 +174,41 @@ export const routes: RouteObject[] = [
             ),
           },
           {
+            // Módulo independiente: Tablero Monitor en Vivo de Listados Pendientes
+            path: ROUTES.MONITOR_PENDIENTES,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.LISTADO_VER}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<MonitorPendientesPage />)}
+              </RequirePermission>
+            ),
+          },
+          {
+            // Módulo PROYECCIÓN: Pantalla de LISTADOS PENDIENTES
+            path: ROUTES.PROYECCION,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.LISTADO_VER}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<ProyeccionPendientesPage />)}
+              </RequirePermission>
+            ),
+          },
+          {
+            path: ROUTES.PROYECCION_PENDIENTES,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.LISTADO_VER}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<ProyeccionPendientesPage />)}
+              </RequirePermission>
+            ),
+          },
+          {
             // Módulo Listados — layout con navegación interna
             path: ROUTES.LISTADOS,
             element: withSuspense(<ListadosLayoutPage />),
@@ -181,10 +237,21 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_PENDIENTES,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'AUDITOR', 'REGISTRADOR', 'SUPERVISOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosPendientesPage />)}
+                  </RequireRole>
+                ),
+              },
+              {
+                path: ROUTES.LISTADOS_ALMACEN,
+                element: (
+                  <RequireRole
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA']}
+                    fallbackRoute={ROUTES.LISTADOS}
+                  >
+                    {withSuspense(<ListadosAlmacenPage />)}
                   </RequireRole>
                 ),
               },
@@ -203,7 +270,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_HISTORIAL,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'REGISTRADOR', 'AUDITOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosHistorialPage />)}

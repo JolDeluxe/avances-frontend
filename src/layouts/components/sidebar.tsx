@@ -26,15 +26,9 @@ export function Sidebar({ navItems, appName = 'Materia Prima', appVersion = 'v.d
     <aside
       className={`
         h-full flex flex-col relative
-        transition-all duration-300 ease-in-out
+        transition-all duration-300 ease-in-out shrink-0
         ${sidebarExpanded ? 'w-72' : 'w-20'}
-
-        /* ESCRITORIO (lg:) -> Sólido e institucional */
-        lg:bg-marca-secundario lg:backdrop-blur-none lg:shadow-none lg:border-none
-
-        /* MÓVIL (max-lg:) -> Liquid Glass Profundo */
-        max-lg:bg-marca-secundario/80 max-lg:backdrop-blur-2xl max-lg:saturate-[1.3]
-        max-lg:border-r max-lg:border-white/10 max-lg:shadow-[0_0_40px_rgba(0,0,0,0.3)]
+        bg-marca-secundario shadow-md border-r border-marca-primario/20
       `}
     >
       <SidebarHeader />

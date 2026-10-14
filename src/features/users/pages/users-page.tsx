@@ -141,7 +141,7 @@ export function UsersPage(): ReactNode {
   const columns: Column<UsuarioItem>[] = [
     {
       key: 'usuario',
-      header: 'Usuario',
+      header: 'Nombre Completo',
       render: (row) => (
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-full bg-marca-primario/10 text-marca-primario flex items-center justify-center font-bold text-sm shrink-0 border border-marca-primario/15">
@@ -156,7 +156,6 @@ export function UsersPage(): ReactNode {
             <span className="font-semibold text-text-primary text-[15px] leading-tight block truncate font-sans">
               {row.nombre}
             </span>
-            <span className="text-xs text-text-secondary font-mono tracking-wide mt-0.5 block">{row.usuario}</span>
           </div>
         </div>
       ),
@@ -165,15 +164,6 @@ export function UsersPage(): ReactNode {
       key: 'rol',
       header: 'Rol',
       render: (row) => <UserRoleBadge rolCodigo={row.rol?.codigo} />,
-    },
-    {
-      key: 'departamento',
-      header: 'Departamento',
-      render: (row) => (
-        <span className="text-text-secondary text-sm font-medium">
-          {row.departamento?.nombre || 'General'}
-        </span>
-      ),
     },
     {
       key: 'segmentacion',
@@ -191,30 +181,28 @@ export function UsersPage(): ReactNode {
       header: 'Líneas Asignadas',
       render: (row) => {
         if (row.rol?.codigo !== 'ALMACENISTA') {
-          return <span className="text-text-muted text-sm">—</span>;
+          return <span className="text-text-muted text-xs">—</span>;
         }
         if (!row.lineasAsignadas || row.lineasAsignadas.length === 0) {
-          return <span className="text-text-muted text-sm italic">Todas las líneas</span>;
+          return (
+            <span className="text-xs font-medium text-text-secondary">
+              Todas las líneas
+            </span>
+          );
         }
+
         return (
-          <div className="flex items-center flex-wrap gap-1.5 max-w-sm">
-            {row.lineasAsignadas.slice(0, 2).map((l) => (
-              <span
+          <ul className="space-y-0.5 py-1 text-xs">
+            {row.lineasAsignadas.map((l) => (
+              <li
                 key={l.id}
-                className="inline-flex items-center text-xs font-medium text-text-primary bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/60"
+                className="flex items-center gap-1.5 text-text-primary font-medium leading-tight"
               >
-                {l.nombre}
-              </span>
+                <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+                <span>{l.nombre}</span>
+              </li>
             ))}
-            {row.lineasAsignadas.length > 2 && (
-              <span
-                title={row.lineasAsignadas.slice(2).map((l) => l.nombre).join(', ')}
-                className="inline-flex items-center text-2xs font-bold text-text-muted bg-slate-100/70 dark:bg-slate-800/40 px-1.5 py-0.5 rounded cursor-help border border-slate-200/50"
-              >
-                +{row.lineasAsignadas.length - 2}
-              </span>
-            )}
-          </div>
+          </ul>
         );
       },
     },

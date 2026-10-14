@@ -11,48 +11,66 @@ interface TabItem {
   isSeparated?: boolean;
 }
 
-const LISTADOS_TABS: TabItem[] = [
-  {
-    id: 'administracion',
-    label: 'Agregar +',
-    to: ROUTES.LISTADOS_ADMINISTRACION,
-    allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'SUPERVISOR', 'REGISTRADOR'],
+const ALL_TABS: Record<string, TabItem> = {
+  almacen: {
+    id: 'almacen',
+    label: 'Almacén',
+    to: ROUTES.LISTADOS_ALMACEN,
   },
-  {
+  pendientes: {
     id: 'pendientes',
     label: 'Pendientes',
     to: ROUTES.LISTADOS_PENDIENTES,
-    allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'ALMACENISTA'],
   },
-  {
+  administracion: {
+    id: 'administracion',
+    label: 'Agregar +',
+    to: ROUTES.LISTADOS_ADMINISTRACION,
+  },
+  auditoria: {
     id: 'auditoria',
     label: 'Auditoría',
     to: ROUTES.LISTADOS_AUDITORIA,
-    allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'AUDITOR'],
   },
-  {
+  historial: {
     id: 'historial',
     label: 'Historial',
     to: ROUTES.LISTADOS_HISTORIAL,
-    allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'SUPERVISOR'],
     isSeparated: true,
   },
-];
+};
+
+/**
+ * Orden y visibilidad de tabs según el rol:
+ * - ALMACENISTA: ALMACEN | PENDIENTES
+ * - REGISTRADOR: AGREGAR + | PENDIENTES | (Historial separado)
+ * - AUDITOR: AUDITORIA | PENDIENTES | (Historial separado)
+ * - ADMIN / SUPER_ADMIN: AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
+ */
+const ROLE_TABS_CONFIG: Record<string, string[]> = {
+  ALMACENISTA: ['almacen', 'pendientes'],
+  REGISTRADOR: ['administracion', 'pendientes', 'historial'],
+  AUDITOR: ['auditoria', 'pendientes', 'historial'],
+  ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
+  SUPER_ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
+  SUPERVISOR: ['pendientes', 'historial'],
+};
 
 /**
  * Barra de navegación interna del módulo Listados.
  * Usa NavLink para que el tab activo se marque automáticamente.
- * Filtra los tabs según el rol del usuario (ej. ALMACENISTA solo ve Pendientes).
- * Historial se muestra ligeramente más alejado del grupo principal de tabs.
+ * Filtra y ordena los tabs según la configuración exacta del rol del usuario.
+ * Historial se muestra a la derecha, separado del bloque principal de tabs.
  */
 export function ListadosNav({ className }: { className?: string }) {
   const { rol, isSuperAdmin } = usePermissions();
 
-  const visibleTabs = LISTADOS_TABS.filter((tab) => {
-    if (isSuperAdmin) return true;
-    if (!tab.allowedRoles) return true;
-    return tab.allowedRoles.includes(rol);
-  });
+  const roleKey = isSuperAdmin ? 'SUPER_ADMIN' : (rol || '');
+  const tabIds = ROLE_TABS_CONFIG[roleKey] || ['pendientes', 'historial'];
+
+  const visibleTabs: TabItem[] = tabIds
+    .map((id) => ALL_TABS[id])
+    .filter((t): t is TabItem => Boolean(t));
 
   // Si solo hay un tab visible (ej. ALMACENISTA con solo Pendientes), se oculta la barra de tabs redundante
   if (visibleTabs.length <= 1) {
@@ -69,7 +87,7 @@ export function ListadosNav({ className }: { className?: string }) {
       end
       className={({ isActive }) =>
         cn(
-          'relative px-3.5 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm md:text-base font-semibold transition-colors outline-none tracking-wide',
+          'relative px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-colors outline-none tracking-wide',
           'focus-visible:ring-2 focus-visible:ring-border-focus rounded-t-md',
           isActive
             ? 'text-text-primary after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-0.5 after:bg-marca-secundario after:rounded-full'

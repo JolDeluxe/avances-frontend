@@ -16,6 +16,13 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     permission: PERMISOS.LISTADO_VER,
   },
   {
+    id: 'proyeccion',
+    name: 'Proyectar',
+    icon: 'tv',
+    route: ROUTES.PROYECCION,
+    permission: PERMISOS.LISTADO_VER,
+  },
+  {
     id: 'usuarios',
     name: 'Usuarios',
     icon: 'group',
@@ -26,7 +33,7 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
   {
     id: 'lineas',
     name: 'Líneas / Maquilas',
-    icon: 'precision_manufacturing',
+    icon: 'format_list_numbered',
     route: ROUTES.LINEAS,
     permission: PERMISOS.DEPARTAMENTO_ADMINISTRAR,
     allowedRoles: ['SUPER_ADMIN'],

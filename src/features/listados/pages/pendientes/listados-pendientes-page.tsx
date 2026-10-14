@@ -5,6 +5,7 @@ import { useLineasProduccion } from '../../hooks/use-lineas-produccion';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { ListadosPendientesParalelaTable } from '../../components/listados-pendientes-paralela-table';
 import { ListadoDetailModal } from '../../components/listado-detail-modal';
+import { ListadoFormModal } from '../../components/listado-form-modal';
 import { ListadoTransitionModal, type TransitionAction } from '../../components/listado-transition-modal';
 import { ListadoAccionModal, type AccionOperativaAlmacen } from '../../components/listado-accion-modal';
 import { ListadoBatchAccionModal, type BatchAccionOperativa } from '../../components/listado-batch-accion-modal';
@@ -32,12 +33,16 @@ function formatFecha(fechaStr: string): string {
  * - ACCESORIOS (Derecha): NO | LISTADO | Fecha Req. | Estado | Línea | DIR | IND | BOL | Acciones
  */
 export function ListadosPendientesPage(): ReactNode {
-  const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { hasPermission, isSuperAdmin, isAdmin } = usePermissions();
   const canVer = hasPermission('listado:ver');
-  const canSeparar = hasPermission('listado:separar');
-  const canEntregar = hasPermission('listado:entregar');
-  const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
-  const canCancelar = hasPermission('listado:cancelar');
+
+  // En la vista general de PENDIENTES solo pueden operar/seleccionar ADMIN y SUPER_ADMIN
+  const canInteract = isSuperAdmin || isAdmin;
+  const canSeparar = canInteract && hasPermission('listado:separar');
+  const canEntregar = canInteract && hasPermission('listado:entregar');
+  const canDescontar = canInteract && hasPermission('listado:descontar');
+  const canRetroceder = canInteract && hasPermission('listado:retroceder');
+  const canCancelar = canInteract && hasPermission('listado:cancelar');
 
   const {
     items,
@@ -46,41 +51,21 @@ export function ListadosPendientesPage(): ReactNode {
     error,
     reloadListados,
     setPage,
-  } = useListados({ fixedEstado: 'PENDIENTE,EN_PROCESO' });
+  } = useListados({
+    fixedEstado: 'PENDIENTE,EN_PROCESO,SEPARADO,ENTREGADO_A_PRODUCCION',
+    modoGlobal: true,
+    customLimit: 1000,
+  });
 
-  const { todasLasLineas } = useLineasProduccion();
+  const { todasLasLineas, departamentos } = useLineasProduccion();
 
-  // ─── Frentes Operativos según perfil (Almacén) ─────────────────────────────
-  const operativeFrentes = useMemo(() => {
-    if (isSuperAdmin || isAdmin) return null;
-    if (!user?.tipoSurtidoAlmacen || user.tipoSurtidoAlmacen === 'TODOS') return null;
-    const parts = user.tipoSurtidoAlmacen.split(',').map((p) => p.trim().toUpperCase());
-    const valid = parts.filter(
-      (p): p is TipoFrenteMaterial => p === 'DIRECTOS' || p === 'INDIRECTOS' || p === 'BOLSAS',
-    );
-    return valid.length > 0 ? valid : null;
-  }, [isSuperAdmin, isAdmin, user?.tipoSurtidoAlmacen]);
-
-  // ─── Desactivación / Atenuación visual de bloques por línea asignada ────────
-  const { isBotaDisabled, isAccesoriosDisabled } = useMemo(() => {
-    if (isSuperAdmin || isAdmin) {
-      return { isBotaDisabled: false, isAccesoriosDisabled: false };
-    }
-    const lineas = user?.lineasAsignadas ?? [];
-    if (lineas.length === 0) {
-      return { isBotaDisabled: false, isAccesoriosDisabled: false };
-    }
-    const hasBota = lineas.some((l) => l.area === 'BOTA');
-    const hasAccesorios = lineas.some((l) => l.area === 'ACCESORIOS');
-    return {
-      isBotaDisabled: !hasBota,
-      isAccesoriosDisabled: !hasAccesorios,
-    };
-  }, [isSuperAdmin, isAdmin, user?.lineasAsignadas]);
+  // En la vista general de PENDIENTES se muestran todos los frentes sin recortar por perfil
+  const operativeFrentes = null;
 
   // ─── Estado de modales y feedback ──────────────────────────────────────────
   const [selectedListado, setSelectedListado] = useState<ListadoItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
+  const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [isTransitionOpen, setIsTransitionOpen] = useState<boolean>(false);
   const [transitionAction, setTransitionAction] = useState<TransitionAction>('retroceder');
   const [transitionTipoFrente, setTransitionTipoFrente] = useState<TipoFrenteMaterial | undefined>(undefined);
@@ -89,6 +74,8 @@ export function ListadosPendientesPage(): ReactNode {
   const [highlightedListadoId, setHighlightedListadoId] = useState<number | number[] | null>(null);
   const [entregandoListadoId, setEntregandoListadoId] = useState<number | number[] | null>(null);
   const [entregandoFrente, setEntregandoFrente] = useState<TipoFrenteMaterial | null>(null);
+  const [descontandoListadoId, setDescontandoListadoId] = useState<number | number[] | null>(null);
+  const [descontandoFrente, setDescontandoFrente] = useState<TipoFrenteMaterial | null>(null);
 
   const triggerHighlight = (id: number | number[]) => {
     setHighlightedListadoId(id);
@@ -120,18 +107,20 @@ export function ListadosPendientesPage(): ReactNode {
   });
 
   const handleToggleSelectBota = (id: number) => {
+    if (!canInteract) return;
     setSelectedBotaIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
   const handleToggleSelectAccesorios = (id: number) => {
+    if (!canInteract) return;
     setSelectedAccesoriosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
-  // Modal operativo de Almacén (Separar / Entregar con checkbox condicional)
+  // Modal operativo (Separar / Entregar / Descontar)
   const [modalAccion, setModalAccion] = useState<{
     isOpen: boolean;
     listado: ListadoItem | null;
@@ -149,27 +138,37 @@ export function ListadosPendientesPage(): ReactNode {
     setTimeout(() => setFeedback(null), 4000);
   };
 
+  const [shouldReopenDetailOnTransitionClose, setShouldReopenDetailOnTransitionClose] = useState<boolean>(false);
+
   const handleOpenDetail = (listado: ListadoItem) => {
     setSelectedListado(listado);
     setIsDetailOpen(true);
   };
 
-  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial) => {
+  const handleOpenEditar = (listado: ListadoItem) => {
+    setSelectedListado(listado);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial, fromDetail = false) => {
+    if (!canInteract) return;
     setSelectedListado(listado);
     setTransitionTipoFrente(tipoFrente);
     setTransitionAction('retroceder');
+    setShouldReopenDetailOnTransitionClose(fromDetail);
     setIsTransitionOpen(true);
   };
 
   const handleOpenCancelarListado = (listado: ListadoItem) => {
+    if (!canInteract) return;
     setSelectedListado(listado);
     setTransitionTipoFrente(undefined);
     setTransitionAction('cancelar');
     setIsTransitionOpen(true);
   };
 
-  // Apertura de modal de confirmación en vez de ejecución directa
   const handleRequestSepararFrente = (listado: ListadoItem, tipoFrente: TipoFrenteMaterial) => {
+    if (!canInteract) return;
     setModalAccion({
       isOpen: true,
       listado,
@@ -179,6 +178,7 @@ export function ListadosPendientesPage(): ReactNode {
   };
 
   const handleRequestEntregarFrente = (listado: ListadoItem, tipoFrente: TipoFrenteMaterial) => {
+    if (!canInteract) return;
     setModalAccion({
       isOpen: true,
       listado,
@@ -187,17 +187,27 @@ export function ListadosPendientesPage(): ReactNode {
     });
   };
 
+  const handleRequestDescontarFrente = (listado: ListadoItem, tipoFrente: TipoFrenteMaterial) => {
+    if (!canInteract) return;
+    setModalAccion({
+      isOpen: true,
+      listado,
+      tipoFrente,
+      accion: 'descontar',
+    });
+  };
+
   // Confirmación desde el modal
   const handleConfirmAccionOperativa = async ({ entregarTambien }: { entregarTambien?: boolean }) => {
     const { listado, tipoFrente, accion } = modalAccion;
-    if (!listado) return;
+    if (!listado || !canInteract) return;
 
     setMutatingRows((prev) => ({ ...prev, [listado.id]: accion }));
     try {
       if (accion === 'separar') {
         const resSeparar = await listadosApi.separar(listado.id, tipoFrente);
         if (!resSeparar.success) {
-          showFeedback('error', resSeparar.message || 'Error al separar el frente.');
+          showFeedback('error', resSeparar.message || 'Error al separar el material.');
           return;
         }
 
@@ -211,7 +221,7 @@ export function ListadosPendientesPage(): ReactNode {
           } else {
             showFeedback(
               'success',
-              `${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente} de listado ${listado.numeroListado} separado y entregado a producción inmediatamente.`,
+              `${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente} de listado ${listado.numeroListado} separado y entregado a producción.`,
             );
           }
         } else {
@@ -220,8 +230,7 @@ export function ListadosPendientesPage(): ReactNode {
             `${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente} de listado ${listado.numeroListado} separado correctamente.`,
           );
         }
-      } else {
-        // accion === 'entregar'
+      } else if (accion === 'entregar') {
         const res = await listadosApi.entregar(listado.id, tipoFrente);
         if (res.success) {
           showFeedback(
@@ -231,14 +240,29 @@ export function ListadosPendientesPage(): ReactNode {
         } else {
           showFeedback('error', res.message || 'Error al entregar.');
         }
+      } else if (accion === 'descontar') {
+        const res = await listadosApi.descontar(listado.id, tipoFrente);
+        if (res.success) {
+          showFeedback(
+            'success',
+            `${TIPO_FRENTE_CONFIG[tipoFrente]?.nombre ?? tipoFrente} de listado ${listado.numeroListado} descontado en sistema.`,
+          );
+        } else {
+          showFeedback('error', res.message || 'Error al descontar en sistema.');
+        }
       }
 
       setModalAccion((prev) => ({ ...prev, isOpen: false }));
 
-      const isEntrega = accion === 'entregar' || Boolean(entregarTambien);
-      if (isEntrega) {
-        // La fila parpadea en verde y se desvanece suavemente antes de desaparecer de la lista
-        // Además actualiza de inmediato el indicador del frente entregado a ENTREGADO (🟡 ✔️)
+      if (accion === 'descontar') {
+        setDescontandoListadoId(listado.id);
+        setDescontandoFrente(tipoFrente);
+        setTimeout(() => {
+          setDescontandoListadoId((curr) => (curr === listado.id ? null : curr));
+          setDescontandoFrente((curr) => (curr === tipoFrente ? null : curr));
+          reloadListados();
+        }, 2000);
+      } else if (accion === 'entregar' || Boolean(entregarTambien)) {
         setEntregandoListadoId(listado.id);
         setEntregandoFrente(tipoFrente);
         setTimeout(() => {
@@ -259,31 +283,34 @@ export function ListadosPendientesPage(): ReactNode {
     }
   };
 
-  // ─── Regla de Negocio PENDIENTES ──────────────────────────────────────────
-  // En PENDIENTES solo se ven hasta que TODOS los frentes operativos del usuario
-  // hayan sido entregados a producción. Si el almacenista terminó sus frentes,
-  // el listado desaparece de su vista para evitar confusiones.
+  // ─── Regla de Negocio PENDIENTES GENERAL ───────────────────────────────────
+  // Desaparecen únicamente cuando TODO (todos los frentes que apliquen) esté en DESCONTADO.
+  // Mientras falte alguno por separar, entregar o descontar, permanece en la lista.
+  // Si el listado está en proceso de animación (descontando o entregando), se retiene
+  // para permitir que se reproduzca el destello morado o verde antes de desaparecer.
   const itemsPendientes = useMemo(() => {
     return items.filter((item) => {
-      if (item.estado === 'CANCELADO' || item.estado === 'ENTREGADO_A_PRODUCCION' || item.estado === 'DESCONTADO') {
+      const isCurrentlyDescontando = Array.isArray(descontandoListadoId)
+        ? descontandoListadoId.includes(item.id)
+        : descontandoListadoId === item.id;
+      const isCurrentlyEntregando = Array.isArray(entregandoListadoId)
+        ? entregandoListadoId.includes(item.id)
+        : entregandoListadoId === item.id;
+
+      if (isCurrentlyDescontando || isCurrentlyEntregando) {
+        return true;
+      }
+
+      if ((item.estado as string) === 'CANCELADO' || (item.estado as string) === 'DESCONTADO') {
         return false;
       }
       if (item.frentes && item.frentes.length > 0) {
-        // Si el usuario tiene frentes operativos restringidos (ej. Almacenista sólo DIRECTOS):
-        if (operativeFrentes && operativeFrentes.length > 0) {
-          const misFrentes = item.frentes.filter((f) => operativeFrentes.includes(f.tipoFrente));
-          // Si el listado no involucra ninguno de mis frentes, no me pertenece
-          if (misFrentes.length === 0) return false;
-          // Permanece en PENDIENTES solo si al menos uno de MIS frentes está en PENDIENTE o SEPARADO
-          return misFrentes.some((f) => f.estado === 'PENDIENTE' || f.estado === 'SEPARADO');
-        }
-
-        // Para usuarios globales (admin) o con TODOS los frentes:
-        return item.frentes.some((f) => f.estado === 'PENDIENTE' || f.estado === 'SEPARADO');
+        // Permanece visible si al menos UN frente aún no está DESCONTADO
+        return item.frentes.some((f) => f.estado !== 'DESCONTADO');
       }
-      return item.estado === 'PENDIENTE' || item.estado === 'EN_PROCESO';
+      return (item.estado as string) !== 'DESCONTADO' && (item.estado as string) !== 'CANCELADO';
     });
-  }, [items, operativeFrentes]);
+  }, [items, descontandoListadoId, entregandoListadoId]);
 
   // Clasificación dinámica de registros en BOTA y ACCESORIOS desde el catálogo del backend
   const { botaItems, accesoriosItems, noClasificados } = useMemo(() => {
@@ -301,9 +328,10 @@ export function ListadosPendientesPage(): ReactNode {
 
   // Conteo de elegibilidad dinámica para las barras de lote
   const botaEligibles = useMemo(() => {
-    const frentesToCheck = operativeFrentes ?? (['DIRECTOS', 'INDIRECTOS'] as TipoFrenteMaterial[]);
+    const frentesToCheck = ['DIRECTOS', 'INDIRECTOS'] as TipoFrenteMaterial[];
     let canSepararCount = 0;
     let canEntregarCount = 0;
+    let canDescontarCount = 0;
 
     selectedBotaListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
@@ -313,15 +341,19 @@ export function ListadosPendientesPage(): ReactNode {
       if (frentes.some((f) => f.estado === 'SEPARADO')) {
         canEntregarCount++;
       }
+      if (frentes.some((f) => f.estado === 'ENTREGADO')) {
+        canDescontarCount++;
+      }
     });
 
-    return { canSepararCount, canEntregarCount };
-  }, [selectedBotaListados, operativeFrentes]);
+    return { canSepararCount, canEntregarCount, canDescontarCount };
+  }, [selectedBotaListados]);
 
   const accesoriosEligibles = useMemo(() => {
-    const frentesToCheck = operativeFrentes ?? (['DIRECTOS', 'INDIRECTOS', 'BOLSAS'] as TipoFrenteMaterial[]);
+    const frentesToCheck = ['DIRECTOS', 'INDIRECTOS', 'BOLSAS'] as TipoFrenteMaterial[];
     let canSepararCount = 0;
     let canEntregarCount = 0;
+    let canDescontarCount = 0;
 
     selectedAccesoriosListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
@@ -331,10 +363,13 @@ export function ListadosPendientesPage(): ReactNode {
       if (frentes.some((f) => f.estado === 'SEPARADO')) {
         canEntregarCount++;
       }
+      if (frentes.some((f) => f.estado === 'ENTREGADO')) {
+        canDescontarCount++;
+      }
     });
 
-    return { canSepararCount, canEntregarCount };
-  }, [selectedAccesoriosListados, operativeFrentes]);
+    return { canSepararCount, canEntregarCount, canDescontarCount };
+  }, [selectedAccesoriosListados]);
 
   // Handler de confirmación del modal masivo
   const handleConfirmBatchAccion = async ({
@@ -346,6 +381,7 @@ export function ListadosPendientesPage(): ReactNode {
     entregarTambien?: boolean;
     motivo?: string;
   }) => {
+    if (!canInteract) return;
     const { area, accion } = batchModal;
     const selectedListados = area === 'BOTA' ? selectedBotaListados : selectedAccesoriosListados;
 
@@ -355,6 +391,7 @@ export function ListadosPendientesPage(): ReactNode {
       if (!f) return false;
       if (accion === 'separar') return f.estado === 'PENDIENTE';
       if (accion === 'entregar') return f.estado === 'SEPARADO';
+      if (accion === 'descontar') return f.estado === 'ENTREGADO';
       return false;
     });
 
@@ -419,7 +456,6 @@ export function ListadosPendientesPage(): ReactNode {
       const exitososIds = res.data.exitosos.map((e) => e.id);
 
       // Retirar de la selección ÚNICAMENTE los listados procesados con éxito
-      // para conservar los demás que aún tienen acciones pendientes (ej. separar)
       if (area === 'BOTA') {
         setSelectedBotaIds((prev) => prev.filter((id) => !exitososIds.includes(id)));
       } else {
@@ -428,9 +464,15 @@ export function ListadosPendientesPage(): ReactNode {
 
       setBatchModal((prev) => ({ ...prev, isOpen: false }));
 
-      const isEntregaBatch = accion === 'entregar' || Boolean(entregarTambien);
-
-      if (isEntregaBatch && exitososIds.length > 0) {
+      if (accion === 'descontar' && exitososIds.length > 0) {
+        setDescontandoListadoId(exitososIds);
+        setDescontandoFrente(tipoFrente);
+        setTimeout(() => {
+          setDescontandoListadoId(null);
+          setDescontandoFrente(null);
+          reloadListados();
+        }, 2000);
+      } else if ((accion === 'entregar' || Boolean(entregarTambien)) && exitososIds.length > 0) {
         setEntregandoListadoId(exitososIds);
         setEntregandoFrente(tipoFrente);
         setTimeout(() => {
@@ -512,7 +554,7 @@ export function ListadosPendientesPage(): ReactNode {
       )}
 
       {/* ─── Barras Flotantes de Operaciones en Lote (BOTA y ACCESORIOS) ─── */}
-      {(selectedBotaIds.length > 0 || selectedAccesoriosIds.length > 0) && (
+      {canInteract && (selectedBotaIds.length > 0 || selectedAccesoriosIds.length > 0) && (
         <div className="sticky top-12 z-20 grid grid-cols-1 md:grid-cols-2 gap-3 py-1 bg-cuadra-arena/80 backdrop-blur-xs rounded-xl">
           {/* Barra Lote BOTA */}
           {selectedBotaIds.length > 0 && (
@@ -544,7 +586,7 @@ export function ListadosPendientesPage(): ReactNode {
                         isOpen: true,
                         area: 'BOTA',
                         accion: 'separar',
-                        tipoFrente: operativeFrentes?.[0] ?? 'DIRECTOS',
+                        tipoFrente: 'DIRECTOS',
                       });
                     }}
                   >
@@ -561,11 +603,28 @@ export function ListadosPendientesPage(): ReactNode {
                         isOpen: true,
                         area: 'BOTA',
                         accion: 'entregar',
-                        tipoFrente: operativeFrentes?.[0] ?? 'DIRECTOS',
+                        tipoFrente: 'DIRECTOS',
                       });
                     }}
                   >
                     Entregar ({botaEligibles.canEntregarCount})
+                  </Button>
+                )}
+                {canDescontar && botaEligibles.canDescontarCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 px-2.5 bg-app-surface text-purple-700 border-purple-300 hover:bg-purple-50 font-medium"
+                    onClick={() => {
+                      setBatchModal({
+                        isOpen: true,
+                        area: 'BOTA',
+                        accion: 'descontar',
+                        tipoFrente: 'DIRECTOS',
+                      });
+                    }}
+                  >
+                    Descontar ({botaEligibles.canDescontarCount})
                   </Button>
                 )}
               </div>
@@ -602,7 +661,7 @@ export function ListadosPendientesPage(): ReactNode {
                         isOpen: true,
                         area: 'ACCESORIOS',
                         accion: 'separar',
-                        tipoFrente: operativeFrentes?.[0] ?? 'DIRECTOS',
+                        tipoFrente: 'DIRECTOS',
                       });
                     }}
                   >
@@ -619,11 +678,28 @@ export function ListadosPendientesPage(): ReactNode {
                         isOpen: true,
                         area: 'ACCESORIOS',
                         accion: 'entregar',
-                        tipoFrente: operativeFrentes?.[0] ?? 'DIRECTOS',
+                        tipoFrente: 'DIRECTOS',
                       });
                     }}
                   >
                     Entregar ({accesoriosEligibles.canEntregarCount})
+                  </Button>
+                )}
+                {canDescontar && accesoriosEligibles.canDescontarCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 px-2.5 bg-app-surface text-purple-700 border-purple-300 hover:bg-purple-50 font-medium"
+                    onClick={() => {
+                      setBatchModal({
+                        isOpen: true,
+                        area: 'ACCESORIOS',
+                        accion: 'descontar',
+                        tipoFrente: 'DIRECTOS',
+                      });
+                    }}
+                  >
+                    Descontar ({accesoriosEligibles.canDescontarCount})
                   </Button>
                 )}
               </div>
@@ -640,14 +716,17 @@ export function ListadosPendientesPage(): ReactNode {
         isLoading={isLoading}
         page={pagination.page}
         limit={pagination.limit}
-        emptyMessage="No hay listados de Materia Prima pendientes de entrega."
-        frentesPermitidos={operativeFrentes}
-        isBotaDisabled={isBotaDisabled}
-        isAccesoriosDisabled={isAccesoriosDisabled}
+        emptyMessage="No hay listados de Materia Prima pendientes."
+        frentesPermitidos={null}
+        isBotaDisabled={false}
+        isAccesoriosDisabled={false}
         highlightedListadoId={highlightedListadoId}
         entregandoListadoId={entregandoListadoId}
         entregandoFrente={entregandoFrente}
-        allowSelection={true}
+        descontandoListadoId={descontandoListadoId}
+        descontandoFrente={descontandoFrente}
+        allowSelection={canInteract}
+        hideActions={!canInteract}
         selectedBotaIds={selectedBotaIds}
         selectedAccesoriosIds={selectedAccesoriosIds}
         onToggleSelectBota={handleToggleSelectBota}
@@ -661,13 +740,17 @@ export function ListadosPendientesPage(): ReactNode {
         }}
         acciones={{
           onVerDetalle: handleOpenDetail,
+          onEditar: handleOpenEditar,
           onSepararFrente: handleRequestSepararFrente,
           onEntregarFrente: handleRequestEntregarFrente,
+          onDescontarFrente: handleRequestDescontarFrente,
           onRetrocederFrente: handleOpenRetrocederFrente,
           onCancelar: handleOpenCancelarListado,
           mutatingRows,
           canSeparar,
           canEntregar,
+          canDescontar,
+          canEditar: canInteract,
           canRetroceder,
           canCancelar,
         }}
@@ -678,15 +761,58 @@ export function ListadosPendientesPage(): ReactNode {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         listado={selectedListado}
+        onEdit={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenEditar(listado);
+        }}
+        onRequestCancelar={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenCancelarListado(listado);
+        }}
         onRequestRetroceder={(listado, tipoFrente) => {
           setIsDetailOpen(false);
-          handleOpenRetrocederFrente(listado, tipoFrente);
+          handleOpenRetrocederFrente(listado, tipoFrente, true);
         }}
-        onListadoUpdated={(updated) => {
+        onListadoUpdated={(updated, meta) => {
+          if (meta?.accion === 'descontar' && updated?.id) {
+            setDescontandoListadoId(updated.id);
+            setDescontandoFrente(meta.tipoFrente ?? null);
+            setTimeout(() => {
+              setDescontandoListadoId((curr) => (curr === updated.id ? null : curr));
+              setDescontandoFrente((curr) => (curr === meta.tipoFrente ? null : curr));
+              reloadListados();
+            }, 2000);
+          } else if (meta?.accion === 'entregar' && updated?.id) {
+            setEntregandoListadoId(updated.id);
+            setEntregandoFrente(meta.tipoFrente ?? null);
+            setTimeout(() => {
+              setEntregandoListadoId((curr) => (curr === updated.id ? null : curr));
+              setEntregandoFrente((curr) => (curr === meta.tipoFrente ? null : curr));
+              reloadListados();
+            }, 2000);
+          } else {
+            if (updated?.id) {
+              triggerHighlight(updated.id);
+            } else if (selectedListado?.id) {
+              triggerHighlight(selectedListado.id);
+            }
+            reloadListados();
+          }
+        }}
+      />
+
+      <ListadoFormModal
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setSelectedListado(null);
+        }}
+        listado={selectedListado}
+        departamentos={departamentos}
+        onSuccess={(updated) => {
+          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
           if (updated?.id) {
             triggerHighlight(updated.id);
-          } else if (selectedListado?.id) {
-            triggerHighlight(selectedListado.id);
           }
           reloadListados();
         }}
@@ -697,11 +823,16 @@ export function ListadosPendientesPage(): ReactNode {
         onClose={() => {
           setIsTransitionOpen(false);
           setTransitionTipoFrente(undefined);
+          if (shouldReopenDetailOnTransitionClose) {
+            setShouldReopenDetailOnTransitionClose(false);
+            setIsDetailOpen(true);
+          }
         }}
         listado={selectedListado}
         action={transitionAction}
         tipoFrente={transitionTipoFrente}
         onSuccess={(updated) => {
+          setShouldReopenDetailOnTransitionClose(false);
           showFeedback('success', `Operación completada en listado ${updated.numeroListado}.`);
           if (updated?.id) {
             triggerHighlight(updated.id);

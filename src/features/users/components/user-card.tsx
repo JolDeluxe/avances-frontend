@@ -67,27 +67,44 @@ export function UserCard({
         </div>
       </div>
 
-      {/* Segmentación Operativa */}
-      {(user.tipoSurtidoAlmacen || user.tipoMaterialAuditor) && (
-        <div className="text-xs pt-1 border-t border-border/40">
-          <span className="text-text-muted block text-2xs uppercase mb-1">Segmentación Operativa</span>
+      {/* Segmentación Operativa y Líneas */}
+      <div className="text-xs pt-2 border-t border-border/40 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-text-muted text-[10px] uppercase font-bold tracking-wider">
+            Segmentación
+          </span>
           <UserSegmentacionBadge
             tipoSurtidoAlmacen={user.tipoSurtidoAlmacen}
             tipoMaterialAuditor={user.tipoMaterialAuditor}
             rolCodigo={user.rol.codigo}
           />
         </div>
-      )}
 
-      {/* Lines if Almacenista */}
-      {user.rol?.codigo === 'ALMACENISTA' && user.lineasAsignadas && user.lineasAsignadas.length > 0 && (
-        <div className="text-xs pt-1">
-          <span className="text-text-muted block text-2xs uppercase mb-0.5">Líneas Asignadas</span>
-          <p className="text-xs text-text-secondary truncate">
-            {user.lineasAsignadas.map((l) => l.nombre).join(', ')}
-          </p>
-        </div>
-      )}
+        {user.rol?.codigo === 'ALMACENISTA' && (
+          <div className="pt-1">
+            <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider mb-1">
+              Líneas Asignadas
+            </span>
+            {!user.lineasAsignadas || user.lineasAsignadas.length === 0 ? (
+              <span className="text-xs text-text-secondary font-medium">
+                Todas las líneas
+              </span>
+            ) : (
+              <ul className="space-y-0.5 text-xs">
+                {user.lineasAsignadas.map((l) => (
+                  <li
+                    key={l.id}
+                    className="flex items-center gap-1.5 text-text-primary font-medium"
+                  >
+                    <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+                    <span>{l.nombre}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Action Buttons */}
       <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-border">

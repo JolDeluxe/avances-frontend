@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils/cn';
 import { useListados } from '../../hooks/use-listados';
@@ -7,6 +8,7 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { listadosApi } from '../../api/listados-api';
 import { ListadosPendientesParalelaTable } from '../../components/listados-pendientes-paralela-table';
 import { ListadoDetailModal } from '../../components/listado-detail-modal';
+import { ListadoFormModal } from '../../components/listado-form-modal';
 import { ListadoTransitionModal, type TransitionAction } from '../../components/listado-transition-modal';
 import { clasificarListadosPorArea } from '../../utils/classify-listados';
 import type { ListadoItem, TipoFrenteMaterial } from '../../types/listados.types';
@@ -65,14 +67,34 @@ export function ListadosHistorialPage(): ReactNode {
     };
   }, [isSuperAdmin, isAdmin, user?.lineasAsignadas]);
 
-  // ─── Control de Año y Mes (Por defecto Mes y Año actual) ───────────────────
+  // ─── Control de Año y Mes (Sincronizado con URL SearchParams) ───────────
+  const [searchParams, setSearchParams] = useSearchParams();
   const hoy = new Date();
   const anioActual = hoy.getFullYear();
   const mesActual = String(hoy.getMonth() + 1).padStart(2, '0');
 
-  const [aniosDisponibles, setAniosDisponibles] = useState<number[]>([anioActual]);
-  const [selectedAnio, setSelectedAnio] = useState<number>(anioActual);
-  const [selectedMes, setSelectedMes] = useState<string>(mesActual);
+  // Inicializar desde la URL si existe el parámetro, de lo contrario usar fecha actual
+  const anioParam = searchParams.get('anio');
+  const mesParam = searchParams.get('mes');
+  const initialAnio = anioParam && !Number.isNaN(Number(anioParam)) ? Number(anioParam) : anioActual;
+  const initialMes = mesParam && MESES.some((m) => m.value === mesParam) ? mesParam : mesActual;
+
+  const [aniosDisponibles, setAniosDisponibles] = useState<number[]>([initialAnio]);
+  const [selectedAnio, setSelectedAnio] = useState<number>(initialAnio);
+  const [selectedMes, setSelectedMes] = useState<string>(initialMes);
+
+  // Mantener sincronizado si la URL cambia hacia atrás o adelante en el navegador
+  useEffect(() => {
+    if (anioParam && !Number.isNaN(Number(anioParam)) && Number(anioParam) !== selectedAnio) {
+      setSelectedAnio(Number(anioParam));
+    }
+  }, [anioParam]);
+
+  useEffect(() => {
+    if (mesParam && MESES.some((m) => m.value === mesParam) && mesParam !== selectedMes) {
+      setSelectedMes(mesParam);
+    }
+  }, [mesParam]);
 
   // Cargar años con registros reales desde el backend
   useEffect(() => {
@@ -80,9 +102,16 @@ export function ListadosHistorialPage(): ReactNode {
     listadosApi.getAnios().then((res) => {
       if (isMounted && res.success && res.data && res.data.length > 0) {
         setAniosDisponibles(res.data);
-        // Si el año actual no estuviera en la lista, fijar el primer año disponible
-        if (!res.data.includes(selectedAnio)) {
-          setSelectedAnio(res.data[0]);
+        // Si el año seleccionado no estuviera en los datos y no viene forzado por URL
+        if (!res.data.includes(selectedAnio) && !searchParams.get('anio')) {
+          const primerAnio = res.data[0];
+          setSelectedAnio(primerAnio);
+          setSearchParams((prev: URLSearchParams) => {
+            const next = new URLSearchParams(prev);
+            next.set('anio', String(primerAnio));
+            if (!next.has('mes')) next.set('mes', selectedMes);
+            return next;
+          });
         }
       }
     }).catch(() => {
@@ -92,6 +121,26 @@ export function ListadosHistorialPage(): ReactNode {
       isMounted = false;
     };
   }, []);
+
+  const handleChangeAnio = (nuevoAnio: number) => {
+    setSelectedAnio(nuevoAnio);
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      next.set('anio', String(nuevoAnio));
+      next.set('mes', selectedMes);
+      return next;
+    });
+  };
+
+  const handleChangeMes = (nuevoMes: string) => {
+    setSelectedMes(nuevoMes);
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      next.set('anio', String(selectedAnio));
+      next.set('mes', nuevoMes);
+      return next;
+    });
+  };
 
   // Calcular rango de fechas para el mes completo seleccionado
   const { fechaDesdeCalculada, fechaHastaCalculada } = useMemo(() => {
@@ -103,7 +152,12 @@ export function ListadosHistorialPage(): ReactNode {
     };
   }, [selectedAnio, selectedMes]);
 
-  // Hook principal de listados configurado para traer todo el mes (customLimit: 1000)
+  // Si hay término de búsqueda activo en la URL, se omite el filtro de fechas para buscar en TODO el registro histórico
+  const isBuscandoGlobal = Boolean(searchParams.get('numeroListado')?.trim());
+
+  // Hook principal de listados:
+  // - Si el usuario busca un número de listado: busca en TODO el registro histórico (sin limitar por fechas).
+  // - Si no hay búsqueda: aplica el rango mensual seleccionado por defecto.
   const {
     items,
     pagination,
@@ -114,21 +168,18 @@ export function ListadosHistorialPage(): ReactNode {
     setEstado,
     searchTerm,
     setSearchTerm,
-    setFechaDesde,
-    setFechaHasta,
-  } = useListados({ customLimit: 1000 });
+  } = useListados({
+    customLimit: 1000,
+    fixedFechaDesde: isBuscandoGlobal ? undefined : fechaDesdeCalculada,
+    fixedFechaHasta: isBuscandoGlobal ? undefined : fechaHastaCalculada,
+  });
 
-  // Sincronizar el rango del mes seleccionado con los filtros de la URL/hook
-  useEffect(() => {
-    setFechaDesde(fechaDesdeCalculada);
-    setFechaHasta(fechaHastaCalculada);
-  }, [fechaDesdeCalculada, fechaHastaCalculada, setFechaDesde, setFechaHasta]);
-
-  const { todasLasLineas } = useLineasProduccion();
+  const { todasLasLineas, departamentos } = useLineasProduccion();
 
   // ─── Estado de modales y feedback ──────────────────────────────────────────
   const [selectedListado, setSelectedListado] = useState<ListadoItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
+  const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [isTransitionOpen, setIsTransitionOpen] = useState<boolean>(false);
   const [transitionAction, setTransitionAction] = useState<TransitionAction>('retroceder');
   const [transitionTipoFrente, setTransitionTipoFrente] = useState<TipoFrenteMaterial | undefined>(undefined);
@@ -139,15 +190,23 @@ export function ListadosHistorialPage(): ReactNode {
     setTimeout(() => setFeedback(null), 4000);
   };
 
+  const [shouldReopenDetailOnTransitionClose, setShouldReopenDetailOnTransitionClose] = useState<boolean>(false);
+
   const handleOpenDetail = (listado: ListadoItem) => {
     setSelectedListado(listado);
     setIsDetailOpen(true);
   };
 
-  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial) => {
+  const handleOpenEditar = (listado: ListadoItem) => {
+    setSelectedListado(listado);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial, fromDetail = false) => {
     setSelectedListado(listado);
     setTransitionTipoFrente(tipoFrente);
     setTransitionAction('retroceder');
+    setShouldReopenDetailOnTransitionClose(fromDetail);
     setIsTransitionOpen(true);
   };
 
@@ -187,8 +246,16 @@ export function ListadosHistorialPage(): ReactNode {
         <div>
           <h2 className="text-xl font-bold text-text-primary">Historial General</h2>
           <p className="text-xs text-text-secondary font-lectura mt-0.5">
-            Registro mensual de listados por fecha requerida. Mostrando todos los registros de{' '}
-            <span className="font-semibold text-text-primary capitalize">{mesNombre} {selectedAnio}</span> ({items.length} listados).
+            {isBuscandoGlobal ? (
+              <>
+                Búsqueda en <span className="font-semibold text-brand-primary">todo el registro histórico</span> para &quot;{searchParams.get('numeroListado')}&quot; ({items.length} {items.length === 1 ? 'listado encontrado' : 'listados encontrados'}).
+              </>
+            ) : (
+              <>
+                Registro mensual de listados por fecha requerida. Mostrando todos los registros de{' '}
+                <span className="font-semibold text-text-primary capitalize">{mesNombre} {selectedAnio}</span> ({items.length} listados).
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -226,7 +293,7 @@ export function ListadosHistorialPage(): ReactNode {
           </div>
 
           {/* 2. FECHAS: AÑO Y MES (Pegados a la búsqueda) */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className={cn("flex items-center gap-2 flex-wrap transition-opacity duration-200", isBuscandoGlobal && "opacity-60")}>
             {/* Selector de AÑO */}
             <div className="flex items-center bg-app-surface rounded-lg border border-border shadow-2xs overflow-hidden">
               <span className="text-[10px] uppercase font-bold text-text-muted px-2 select-none bg-app-surface-muted/50 border-r border-border py-1.5">
@@ -234,8 +301,9 @@ export function ListadosHistorialPage(): ReactNode {
               </span>
               <select
                 value={selectedAnio}
-                onChange={(e) => setSelectedAnio(Number(e.target.value))}
+                onChange={(e) => handleChangeAnio(Number(e.target.value))}
                 className="text-xs px-2.5 py-1.5 bg-transparent text-text-primary font-bold focus:outline-none cursor-pointer"
+                title={isBuscandoGlobal ? "Limpia la búsqueda para filtrar por este año" : undefined}
               >
                 {aniosDisponibles.map((a) => (
                   <option key={`anio-${a}`} value={a}>
@@ -252,8 +320,9 @@ export function ListadosHistorialPage(): ReactNode {
               </span>
               <select
                 value={selectedMes}
-                onChange={(e) => setSelectedMes(e.target.value)}
+                onChange={(e) => handleChangeMes(e.target.value)}
                 className="text-xs px-2.5 py-1.5 bg-transparent text-text-primary font-bold focus:outline-none cursor-pointer"
+                title={isBuscandoGlobal ? "Limpia la búsqueda para filtrar por este mes" : undefined}
               >
                 {MESES.map((m) => (
                   <option key={`mes-${m.value}`} value={m.value}>
@@ -340,12 +409,15 @@ export function ListadosHistorialPage(): ReactNode {
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
         emptyMessage="No hay listados históricos registrados para el mes seleccionado."
+        allowSelection={false}
         acciones={{
           onVerDetalle: handleOpenDetail,
+          onEditar: handleOpenEditar,
           onRetrocederFrente: handleOpenRetrocederFrente,
           onCancelar: handleOpenCancelarListado,
           canRetroceder,
-          canCancelar: false,
+          canEditar: isSuperAdmin || isAdmin,
+          canCancelar: isSuperAdmin || isAdmin,
         }}
       />
 
@@ -354,11 +426,33 @@ export function ListadosHistorialPage(): ReactNode {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         listado={selectedListado}
+        onEdit={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenEditar(listado);
+        }}
+        onRequestCancelar={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenCancelarListado(listado);
+        }}
         onRequestRetroceder={(listado, tipoFrente) => {
           setIsDetailOpen(false);
-          handleOpenRetrocederFrente(listado, tipoFrente);
+          handleOpenRetrocederFrente(listado, tipoFrente, true);
         }}
         onListadoUpdated={() => {
+          reloadListados();
+        }}
+      />
+
+      <ListadoFormModal
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setSelectedListado(null);
+        }}
+        listado={selectedListado}
+        departamentos={departamentos}
+        onSuccess={(updated) => {
+          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
           reloadListados();
         }}
       />
@@ -368,11 +462,16 @@ export function ListadosHistorialPage(): ReactNode {
         onClose={() => {
           setIsTransitionOpen(false);
           setTransitionTipoFrente(undefined);
+          if (shouldReopenDetailOnTransitionClose) {
+            setShouldReopenDetailOnTransitionClose(false);
+            setIsDetailOpen(true);
+          }
         }}
         listado={selectedListado}
         action={transitionAction}
         tipoFrente={transitionTipoFrente}
         onSuccess={(updated) => {
+          setShouldReopenDetailOnTransitionClose(false);
           showFeedback('success', `Operación completada en listado ${updated.numeroListado}.`);
           reloadListados();
         }}

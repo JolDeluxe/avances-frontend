@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useTransition } from 'react';
 import { useSearchParams } from 'react-router';
 import { listadosApi } from '../api/listados-api';
+import { useListadosStreamListener } from '../context/listados-stream-context';
+import type { ListadoEventoPayload } from '../types/listados-events.types';
 import type {
   ListadoItem,
   ListadoFilters,
@@ -28,7 +30,10 @@ const DEFAULT_PAGINATION: PaginationMeta = {
 interface UseListadosOptions {
   fixedEstado?: EstadoListado | string;
   excludeEstado?: EstadoListado;
+  fixedFechaDesde?: string;
+  fixedFechaHasta?: string;
   customLimit?: number;
+  modoGlobal?: boolean;
 }
 
 export function useListados(options?: UseListadosOptions) {
@@ -51,8 +56,8 @@ export function useListados(options?: UseListadosOptions) {
     ? Number(searchParams.get('departamentoId'))
     : undefined;
   const numeroListado = searchParams.get('numeroListado') || '';
-  const fechaDesde = searchParams.get('fechaDesde') || undefined;
-  const fechaHasta = searchParams.get('fechaHasta') || undefined;
+  const fechaDesde = options?.fixedFechaDesde ?? (searchParams.get('fechaDesde') || undefined);
+  const fechaHasta = options?.fixedFechaHasta ?? (searchParams.get('fechaHasta') || undefined);
   const page = searchParams.get('page') ? Math.max(1, Number(searchParams.get('page'))) : 1;
 
   // ─── Búsqueda local con debounce ─────────────────────────────────────────
@@ -88,8 +93,10 @@ export function useListados(options?: UseListadosOptions) {
 
   // ─── Fetch ────────────────────────────────────────────────────────────────
 
-  const fetchListados = useCallback(async () => {
-    setIsLoading(true);
+  const fetchListados = useCallback(async (silencioso = false) => {
+    if (!silencioso) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const filters: ListadoFilters = {
@@ -101,6 +108,7 @@ export function useListados(options?: UseListadosOptions) {
         fechaHasta,
         page,
         limit: options?.customLimit ?? 60,
+        modoGlobal: options?.modoGlobal,
       };
 
       const response = await listadosApi.getListados(filters);
@@ -122,13 +130,85 @@ export function useListados(options?: UseListadosOptions) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al cargar listados';
       setError(msg);
     } finally {
-      setIsLoading(false);
+      if (!silencioso) {
+        setIsLoading(false);
+      }
     }
-  }, [estado, excludeEstado, lineaProduccionId, departamentoId, numeroListado, fechaDesde, fechaHasta, page, options?.customLimit]);
+  }, [estado, excludeEstado, lineaProduccionId, departamentoId, numeroListado, fechaDesde, fechaHasta, page, options?.customLimit, options?.modoGlobal]);
 
   useEffect(() => {
     fetchListados();
   }, [fetchListados]);
+
+  // ─── Sincronización en Tiempo Real (SSE) ──────────────────────────────────
+  useListadosStreamListener(
+    useCallback(
+      (evento: ListadoEventoPayload) => {
+        // 1. Si el evento afecta a un ítem actualmente visible en la lista
+        setItems((currentItems) => {
+          const index = currentItems.findIndex((it) => it.id === evento.listadoId);
+          if (index !== -1) {
+            // El listado está en la vista: actualizar in-place
+            const existingItem = currentItems[index];
+
+            // Si hay filtro de estado activo y el nuevo estadoGlobal no encaja con el filtro:
+            if (estado) {
+              const estadosPermitidos = estado.split(',').map((s) => s.trim());
+              if (!estadosPermitidos.includes(evento.estadoGlobal)) {
+                // Programar recarga y remoción con un breve delay (2200ms) para permitir
+                // que las animaciones visuales (verde de entrega / morado de descuento) completen
+                setTimeout(() => {
+                  fetchListados(true);
+                  setItems((prev) => prev.filter((it) => it.id !== evento.listadoId));
+                }, 2200);
+              }
+            }
+
+            // Si hay excludeEstado y el nuevo estado coincide con excludeEstado:
+            if (excludeEstado && evento.estadoGlobal === excludeEstado) {
+              setTimeout(() => {
+                fetchListados(true);
+                setItems((prev) => prev.filter((it) => it.id !== evento.listadoId));
+              }, 2200);
+            }
+
+            // Actualizar frentes y estado global del ítem
+            const updatedFrentes = existingItem.frentes.map((frente) => {
+              const matchingFrente = evento.frentes.find((ef) => ef.tipoFrente === frente.tipoFrente);
+              if (matchingFrente) {
+                return {
+                  ...frente,
+                  estado: matchingFrente.estado,
+                };
+              }
+              return frente;
+            });
+
+            const updatedItem: ListadoItem = {
+              ...existingItem,
+              estado: evento.estadoGlobal,
+              frentes: updatedFrentes,
+              updatedAt: evento.timestamp,
+              fechaActualizacion: evento.timestamp,
+            };
+
+            const nextItems = [...currentItems];
+            nextItems[index] = updatedItem;
+            return nextItems;
+          }
+
+          // 2. Si es una creación (LISTADO_CREADO) o lote de transiciones donde el listado no estaba visible
+          // Si califica para la vista actual (departamento, línea, estado), refrescar en segundo plano sin congelar UI
+          if (evento.tipo === 'LISTADO_CREADO' || evento.tipo === 'LOTE_TRANSICIONADO') {
+            fetchListados(true);
+          }
+
+          return currentItems;
+        });
+      },
+      [estado, excludeEstado, fetchListados],
+    ),
+  );
 
   // ─── Mutadores de URL ─────────────────────────────────────────────────────
 

@@ -141,6 +141,7 @@ export interface ListadoFilters {
   limit?: number;
   pagina?: number;
   porPagina?: number;
+  modoGlobal?: boolean;
 }
 
 // ─── Inputs de mutación ────────────────────────────────────────────────────────

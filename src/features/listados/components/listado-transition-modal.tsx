@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type ReactNode, type FormEvent } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -35,7 +35,7 @@ const ACTION_CONFIG: Record<
   retroceder: {
     title: 'Retroceder a Materiales Pendientes',
     description:
-      'Esta acción reinicia el estado del frente seleccionado y lo manda directamente al inicio como Materiales Pendientes. Debe indicar el motivo del retroceso.',
+      'Esta acción reinicia el estado de los materiales seleccionados y los manda directamente al inicio como Materiales Pendientes. Debe indicar el motivo del retroceso.',
     confirmLabel: 'Retroceder a Pendientes',
     confirmVariant: 'warning',
     confirmIcon: 'undo',
@@ -66,10 +66,21 @@ export function ListadoTransitionModal({
 }: ListadoTransitionModalProps): ReactNode {
   const [motivo, setMotivo] = useState<string>('');
   const [selectedFrente, setSelectedFrente] = useState<TipoFrenteMaterial | ''>('');
+  const [confirmNumero, setConfirmNumero] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const config = ACTION_CONFIG[action];
+
+  // Identificar si algún frente ya está en Separado en Almacén o entregado
+  const tieneFrentesSeparados = useMemo(() => {
+    return (listado?.frentes ?? []).some(
+      (f) => f.estado === 'SEPARADO' || f.estado === 'ENTREGADO' || f.estado === 'DESCONTADO',
+    );
+  }, [listado?.frentes]);
+
+  // Si se cancela y ya tiene frentes en Separado en Almacén, requiere escribir el número de listado
+  const requiereConfirmacionNumero = action === 'cancelar' && tieneFrentesSeparados;
 
   // Identificar frentes elegibles para retroceder (estado SEPARADO o ENTREGADO)
   const frentesElegibles = (listado?.frentes ?? []).filter(
@@ -79,6 +90,7 @@ export function ListadoTransitionModal({
   useEffect(() => {
     if (isOpen && listado) {
       setMotivo('');
+      setConfirmNumero('');
       setIsSubmitting(false);
       setError(null);
 
@@ -102,12 +114,17 @@ export function ListadoTransitionModal({
   const motivoTrimmed = motivo.trim();
   const isRetroceder = action === 'retroceder';
   const hasValidFrente = !isRetroceder || Boolean(selectedFrente);
-  const isValid = motivoTrimmed.length >= 1 && motivoTrimmed.length <= 500 && hasValidFrente;
+  const isNumeroConfirmed = !requiereConfirmacionNumero || confirmNumero.trim() === listado.numeroListado.trim();
+  const isValid = motivoTrimmed.length >= 1 && motivoTrimmed.length <= 500 && hasValidFrente && isNumeroConfirmed;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (isRetroceder && !selectedFrente) {
       setError('Debe seleccionar el material a retroceder.');
+      return;
+    }
+    if (requiereConfirmacionNumero && confirmNumero.trim() !== listado.numeroListado.trim()) {
+      setError(`Debes escribir exactamente el número de listado (${listado.numeroListado}) para confirmar la cancelación.`);
       return;
     }
     if (!motivoTrimmed || motivoTrimmed.length > 500) {
@@ -206,6 +223,35 @@ export function ListadoTransitionModal({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Confirmación explícita con número de listado si ya está en Separado en Almacén */}
+          {requiereConfirmacionNumero && (
+            <div className="p-3.5 rounded-xl border border-warning/40 bg-warning-subtle/50 space-y-2">
+              <div className="flex items-start gap-2">
+                <Icon name="warning" size="sm" className="text-warning-text shrink-0 mt-0.5" />
+                <div className="text-xs text-warning-text leading-relaxed">
+                  Este listado ya cuenta con materiales en <strong>Separado en Almacén</strong>. Para autorizar la cancelación, escribe el número de listado:{' '}
+                  <span className="font-mono font-bold bg-app-surface px-1.5 py-0.5 rounded border border-border/80 text-text-primary select-all">
+                    {listado.numeroListado}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1 pt-1">
+                <Label htmlFor="confirmNumero" className="text-2xs font-bold text-text-primary">
+                  Escribe el número de listado para confirmar:
+                </Label>
+                <Input
+                  id="confirmNumero"
+                  type="text"
+                  value={confirmNumero}
+                  onChange={(e) => setConfirmNumero(e.target.value)}
+                  placeholder={`Ej: ${listado.numeroListado}`}
+                  className="font-mono text-xs h-9 bg-app-surface"
+                  autoComplete="off"
+                />
+              </div>
             </div>
           )}
 

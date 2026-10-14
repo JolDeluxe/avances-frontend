@@ -231,28 +231,32 @@
     @apply bg-white border border-slate-200 shadow-sm rounded-sm overflow-hidden;
   }
 
-  /* Animación suave y elegante de destello/resalte al registrar un nuevo listado */
+  /* Animación suave y elegante de destello/resalte al registrar o separar materiales */
   @keyframes listado-highlight-pulse {
     0% {
-      background-color: rgb(254 243 199 / 0.7); /* amber-100 suave */
-      box-shadow: inset 3px 0 0 0 rgb(217 119 6 / 0.85); /* acento lateral ambar sutil */
+      background-color: rgb(253 230 138 / 0.85); /* amber-200 */
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6); /* amber-600 */
     }
-    35% {
-      background-color: rgb(254 243 199 / 0.35);
-      box-shadow: inset 3px 0 0 0 rgb(217 119 6 / 0.5);
+    25% {
+      background-color: rgb(253 230 138 / 0.25);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6 / 0.4);
     }
-    65% {
-      background-color: rgb(254 243 199 / 0.6);
-      box-shadow: inset 3px 0 0 0 rgb(217 119 6 / 0.75);
+    50% {
+      background-color: rgb(253 230 138 / 0.9);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6);
+    }
+    75% {
+      background-color: rgb(253 230 138 / 0.35);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6 / 0.5);
     }
     100% {
       background-color: transparent;
-      box-shadow: inset 3px 0 0 0 transparent;
+      box-shadow: inset 4px 0 0 0 transparent;
     }
   }
 
   .animate-highlight-row {
-    animation: listado-highlight-pulse 4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: listado-highlight-pulse 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
 
   /* Animación verde de éxito y parpadeo al entregar a producción antes de desaparecer */

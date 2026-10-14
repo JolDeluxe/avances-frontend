@@ -8,6 +8,7 @@ import type {
   EstadoListado,
   EstadoFrenteMaterial,
 } from '@/features/listados/types/listados.types';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils/cn';
 
 export interface StatusBadgeProps {
@@ -16,6 +17,7 @@ export interface StatusBadgeProps {
   /** Estado de frente de material */
   estadoFrente?: EstadoFrenteMaterial;
   className?: string;
+  showIcon?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function StatusBadge({
   estadoListado,
   estadoFrente,
   className,
+  showIcon = true,
 }: StatusBadgeProps): ReactNode {
   let config: StatusVisualConfig | undefined;
 
@@ -44,13 +47,22 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-semibold border transition-colors',
+        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors',
         resolved.className,
         className,
       )}
     >
-      <span className={cn('w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0', resolved.dot)} />
-      {resolved.label}
+      {showIcon && resolved.icon ? (
+        <Icon
+          name={resolved.icon}
+          fill={resolved.iconFill}
+          size="14px"
+          className="shrink-0"
+        />
+      ) : (
+        <span className={cn('w-2 h-2 rounded-full shrink-0', resolved.dot)} />
+      )}
+      <span>{resolved.label}</span>
     </span>
   );
 }

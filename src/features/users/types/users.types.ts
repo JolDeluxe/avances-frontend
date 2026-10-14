@@ -18,6 +18,8 @@ export interface LineaProduccionSimple {
   id: number;
   codigo: string;
   nombre: string;
+  area?: string;
+  orden?: number;
   departamentoId?: number;
 }
 
@@ -68,7 +70,7 @@ export interface UserFilters {
 }
 
 export interface CreateUserInput {
-  usuario: string;
+  usuario?: string;
   nombre: string;
   password?: string;
   rolId: number;

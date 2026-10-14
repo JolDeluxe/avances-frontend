@@ -10,8 +10,8 @@ import { ListadosNav } from '../components/listados-nav';
  */
 export function ListadosLayoutPage() {
   return (
-    <section className="space-y-5">
-      <div className="sticky -top-6 -mt-6 pt-6 pb-2 z-20 bg-cuadra-arena/95 backdrop-blur-xs">
+    <section className="space-y-2">
+      <div className="sticky -top-6 -mt-6 pt-1 pb-0.5 z-20 bg-cuadra-arena/95 backdrop-blur-xs">
         <ListadosNav />
       </div>
       <div>

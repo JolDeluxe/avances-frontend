@@ -1,9 +1,11 @@
 import { useState, useMemo, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useListados } from '../../hooks/use-listados';
+import { useLineasProduccion } from '../../hooks/use-lineas-produccion';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { ListadosAuditoriaParalelaTable } from '../../components/listados-auditoria-paralela-table';
 import { ListadoDetailModal } from '../../components/listado-detail-modal';
+import { ListadoFormModal } from '../../components/listado-form-modal';
 import { ListadoTransitionModal, type TransitionAction } from '../../components/listado-transition-modal';
 import { ListadoAccionModal } from '../../components/listado-accion-modal';
 import { ListadoBatchAccionModal } from '../../components/listado-batch-accion-modal';
@@ -36,7 +38,7 @@ function formatFecha(fechaStr: string): string {
 export function ListadosAuditoriaPage(): ReactNode {
   const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
   const canVer = hasPermission('listado:ver');
-  const canDescontar = hasPermission('listado:descontar');
+  const canDescontar = isSuperAdmin || isAdmin || hasPermission('listado:descontar');
   const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
 
   // Solo traemos listados entregados a producción o en proceso con frentes entregados
@@ -49,9 +51,12 @@ export function ListadosAuditoriaPage(): ReactNode {
     setPage,
   } = useListados({ fixedEstado: 'ENTREGADO_A_PRODUCCION,EN_PROCESO' });
 
+  const { departamentos } = useLineasProduccion();
+
   // ─── Estado de modales y feedback ──────────────────────────────────────────
   const [selectedListado, setSelectedListado] = useState<ListadoItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
+  const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [isTransitionOpen, setIsTransitionOpen] = useState<boolean>(false);
   const [transitionAction, setTransitionAction] = useState<TransitionAction>('retroceder');
   const [transitionTipoFrente, setTransitionTipoFrente] = useState<TipoFrenteMaterial | undefined>(undefined);
@@ -91,15 +96,30 @@ export function ListadosAuditoriaPage(): ReactNode {
     setTimeout(() => setFeedback(null), 4000);
   };
 
+  const [shouldReopenDetailOnTransitionClose, setShouldReopenDetailOnTransitionClose] = useState<boolean>(false);
+
   const handleOpenDetail = (listado: ListadoItem) => {
     setSelectedListado(listado);
     setIsDetailOpen(true);
   };
 
-  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial) => {
+  const handleOpenEditar = (listado: ListadoItem) => {
+    setSelectedListado(listado);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenCancelarListado = (listado: ListadoItem) => {
+    setSelectedListado(listado);
+    setTransitionTipoFrente(undefined);
+    setTransitionAction('cancelar');
+    setIsTransitionOpen(true);
+  };
+
+  const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial, fromDetail = false) => {
     setSelectedListado(listado);
     setTransitionTipoFrente(tipoFrente);
     setTransitionAction('retroceder');
+    setShouldReopenDetailOnTransitionClose(fromDetail);
     setIsTransitionOpen(true);
   };
 
@@ -195,7 +215,8 @@ export function ListadosAuditoriaPage(): ReactNode {
   // Reglas Operativas de Auditoría:
   // 1. Cada material (DIR/BOL o IND) aparece en su respectiva columna de auditoría en cuanto
   //    es entregado a producción (estado === 'ENTREGADO'), de forma independiente.
-  // 2. Al descontar un material en sistema, desaparece de su respectiva tabla.
+  // 2. Al descontar un material en sistema, desaparece de su respectiva tabla tras completar
+  //    su animación de parpadeo morado (2 segundos).
   // 3. Bolsas se audita y descuenta en la columna de DIRECTOS / BOLSAS.
   // 4. Para consultar listados con materiales ya descontados o históricos, se hace en HISTORIAL.
   const { directosItems, indirectosItems } = useMemo(() => {
@@ -203,29 +224,36 @@ export function ListadosAuditoriaPage(): ReactNode {
     const indirectos: ListadoItem[] = [];
 
     items.forEach((item) => {
-      if (item.estado === 'CANCELADO' || item.estado === 'DESCONTADO') return;
+      const isCurrentlyDescontando = Array.isArray(descontandoListadoId)
+        ? descontandoListadoId.includes(item.id)
+        : descontandoListadoId === item.id;
+
+      if (item.estado === 'CANCELADO') return;
+      if (item.estado === 'DESCONTADO' && !isCurrentlyDescontando) return;
 
       const frentes = item.frentes ?? [];
       if (frentes.length === 0) return;
 
       const dirOBolsas = frentes.find(
-        (f) => (f.tipoFrente === 'DIRECTOS' || f.tipoFrente === 'BOLSAS') && f.estado === 'ENTREGADO'
+        (f) => (f.tipoFrente === 'DIRECTOS' || f.tipoFrente === 'BOLSAS') && (f.estado === 'ENTREGADO' || (isCurrentlyDescontando && (!descontandoFrente || descontandoFrente === f.tipoFrente)))
       );
       const ind = frentes.find((f) => f.tipoFrente === 'INDIRECTOS');
 
       // En la columna DIRECTOS / BOLSAS: aparece de inmediato si DIR o BOL ya fue entregado a producción
+      // o si está actualmente animando su descuento
       if (dirOBolsas) {
         directos.push(item);
       }
 
       // En la columna INDIRECTOS: aparece de inmediato si IND ya fue entregado a producción
-      if (ind && ind.estado === 'ENTREGADO') {
+      // o si está actualmente animando su descuento
+      if (ind && (ind.estado === 'ENTREGADO' || (isCurrentlyDescontando && (!descontandoFrente || descontandoFrente === 'INDIRECTOS')))) {
         indirectos.push(item);
       }
     });
 
     return { directosItems: directos, indirectosItems: indirectos };
-  }, [items]);
+  }, [items, descontandoListadoId, descontandoFrente]);
 
   // Ítems seleccionados completos
   const selectedDirectosListados = useMemo(() => {
@@ -337,7 +365,7 @@ export function ListadosAuditoriaPage(): ReactNode {
         <div>
           <h2 className="text-xl font-bold text-text-primary">Auditoría y Descuento en Sistema</h2>
           <p className="text-xs text-text-secondary font-lectura mt-0.5">
-            Tablero de validación para frentes entregados a producción. Separado por Material Directo e Indirecto.
+            Tablero de validación para materiales entregados a producción. Separado por Material Directo e Indirecto.
             {user?.tipoMaterialAuditor && (
               <span className="ml-2 inline-flex items-center gap-1 font-bold text-marca-secundario bg-cuadra-arena/60 px-2 py-0.5 rounded border border-border/60">
                 <Icon name="badge" size="12px" />
@@ -484,11 +512,15 @@ export function ListadosAuditoriaPage(): ReactNode {
         }}
         acciones={{
           onVerDetalle: handleOpenDetail,
+          onEditar: handleOpenEditar,
+          onCancelar: handleOpenCancelarListado,
           onDescontarFrente: handleRequestDescontarFrente,
           onRetrocederFrente: handleOpenRetrocederFrente,
           mutatingRows,
           canDescontar,
           canRetroceder,
+          canEditar: isSuperAdmin || isAdmin,
+          canCancelar: isSuperAdmin || isAdmin,
           puedeOperarFrente,
         }}
       />
@@ -498,11 +530,43 @@ export function ListadosAuditoriaPage(): ReactNode {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         listado={selectedListado}
+        onEdit={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenEditar(listado);
+        }}
+        onRequestCancelar={(listado) => {
+          setIsDetailOpen(false);
+          handleOpenCancelarListado(listado);
+        }}
         onRequestRetroceder={(listado, tipoFrente) => {
           setIsDetailOpen(false);
-          handleOpenRetrocederFrente(listado, tipoFrente);
+          handleOpenRetrocederFrente(listado, tipoFrente, true);
         }}
-        onListadoUpdated={() => {
+        onListadoUpdated={(updated, meta) => {
+          if (meta?.accion === 'descontar' && updated?.id) {
+            setDescontandoListadoId(updated.id);
+            setDescontandoFrente(meta.tipoFrente ?? null);
+            setTimeout(() => {
+              setDescontandoListadoId((curr) => (curr === updated.id ? null : curr));
+              setDescontandoFrente((curr) => (curr === meta.tipoFrente ? null : curr));
+              reloadListados();
+            }, 2000);
+          } else {
+            reloadListados();
+          }
+        }}
+      />
+
+      <ListadoFormModal
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setSelectedListado(null);
+        }}
+        listado={selectedListado}
+        departamentos={departamentos}
+        onSuccess={(updated) => {
+          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
           reloadListados();
         }}
       />
@@ -512,11 +576,16 @@ export function ListadosAuditoriaPage(): ReactNode {
         onClose={() => {
           setIsTransitionOpen(false);
           setTransitionTipoFrente(undefined);
+          if (shouldReopenDetailOnTransitionClose) {
+            setShouldReopenDetailOnTransitionClose(false);
+            setIsDetailOpen(true);
+          }
         }}
         listado={selectedListado}
         action={transitionAction}
         tipoFrente={transitionTipoFrente}
         onSuccess={(updated) => {
+          setShouldReopenDetailOnTransitionClose(false);
           showFeedback('success', `Operación completada en listado ${updated.numeroListado}.`);
           reloadListados();
         }}

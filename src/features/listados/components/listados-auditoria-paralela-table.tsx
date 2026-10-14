@@ -10,11 +10,15 @@ import type {
 
 export interface AuditoriaAccionesHandlers {
   onVerDetalle: (item: ListadoItem) => void;
+  onEditar?: (item: ListadoItem) => void;
+  onCancelar?: (item: ListadoItem) => void;
   onDescontarFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
   onRetrocederFrente?: (item: ListadoItem, tipoFrente: TipoFrenteMaterial) => void;
   mutatingRows?: Record<number, string | null>;
   canDescontar?: boolean;
   canRetroceder?: boolean;
+  canEditar?: boolean;
+  canCancelar?: boolean;
   puedeOperarFrente?: (tipoFrente: TipoFrenteMaterial) => boolean;
 }
 
@@ -254,9 +258,9 @@ function MenuAccionesAuditoria({
                   setIsOpen(false);
                   acciones.onDescontarFrente!(row, tipoFrenteColumna);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-purple-700 font-semibold hover:bg-purple-50 text-left transition-colors cursor-pointer border-t border-border/50"
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-purple-700 font-semibold hover:bg-purple-500/10 text-left transition-colors cursor-pointer text-[13px] rounded-md border-t border-border/50"
               >
-                <Icon name="done_all" size="xs" />
+                <Icon name="done_all" size="sm" className="text-purple-600" />
                 <span>Descontar en Sistema</span>
               </button>
             )}
@@ -273,6 +277,35 @@ function MenuAccionesAuditoria({
               >
                 <Icon name="undo" size="xs" />
                 <span>Retroceder</span>
+              </button>
+            )}
+            {/* Editar listado */}
+            {acciones.canEditar && acciones.onEditar && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  acciones.onEditar!(row);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-text-primary hover:bg-cuadra-arena/40 text-left transition-colors cursor-pointer border-t border-border/50"
+              >
+                <Icon name="edit" size="xs" className="text-text-muted" />
+                <span>Editar listado</span>
+              </button>
+            )}
+
+            {/* Cancelar listado */}
+            {acciones.canCancelar && acciones.onCancelar && row.estado !== 'CANCELADO' && row.estado !== 'DESCONTADO' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  acciones.onCancelar!(row);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-danger hover:bg-danger/10 text-left transition-colors cursor-pointer border-t border-border/50"
+              >
+                <Icon name="block" size="xs" />
+                <span>Cancelar listado</span>
               </button>
             )}
           </div>,

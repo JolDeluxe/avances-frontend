@@ -277,6 +277,10 @@ export function ListadosAdministracionPage(): ReactNode {
         listado={selectedListado}
         allowSeparar={false}
         onEdit={canEditar ? handleOpenEdit : undefined}
+        onRequestCancelar={canCancelar ? (listado) => {
+          setIsDetailOpen(false);
+          handleOpenCancelarListado(listado);
+        } : undefined}
         onRequestRetroceder={(listado, tipoFrente) => {
           setIsDetailOpen(false);
           handleOpenRetrocederFrente(listado, tipoFrente);
