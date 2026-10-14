@@ -87,8 +87,28 @@ export function Navbar({ navItems, user, onLogout }: NavbarProps) {
           />
         </div>
 
-        {/* RIGHT — user-menu */}
-        <div className="flex items-center gap-2 sm:gap-4 justify-end">
+        {/* RIGHT — botón recarga/actualizar + user-menu */}
+        <div className="flex items-center gap-2 sm:gap-3 justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then((regs) => {
+                  regs.forEach((r) => void r.update());
+                });
+              }
+              window.location.reload();
+            }}
+            title="Recargar y comprobar actualizaciones"
+            aria-label="Recargar aplicación"
+            className="group flex items-center justify-center h-9 w-9 rounded-full border border-slate-200 bg-slate-50 text-slate-600 hover:text-marca-primario hover:bg-slate-100 hover:border-slate-300 transition-all shadow-2xs active:scale-95"
+          >
+            <Icon
+              name="refresh"
+              size="20px"
+              className="transition-transform duration-500 group-hover:rotate-180 group-active:animate-spin text-slate-600 group-hover:text-marca-primario"
+            />
+          </button>
           <UserMenu user={user} onLogout={onLogout} />
         </div>
       </div>

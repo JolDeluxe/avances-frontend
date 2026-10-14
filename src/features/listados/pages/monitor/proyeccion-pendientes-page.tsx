@@ -204,6 +204,29 @@ export function ProyeccionPendientesPage(): ReactNode {
             </span>
           </div>
 
+          {/* Botón de Recarga / Sincronización */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then((regs) => {
+                  regs.forEach((r) => void r.update());
+                });
+              }
+              window.location.reload();
+            }}
+            className="h-8 w-8 p-0 border-border bg-app-surface hover:bg-app-surface-muted/60 text-text-primary shadow-2xs group"
+            title="Recargar datos y comprobar versión"
+          >
+            <Icon
+              name="refresh"
+              size="18px"
+              className="text-text-secondary group-hover:text-text-primary group-hover:rotate-180 transition-transform duration-500"
+            />
+          </Button>
+
           {/* Botón de Pantalla Completa (solo icono) */}
           <Button
             type="button"

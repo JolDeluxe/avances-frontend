@@ -164,11 +164,41 @@ export function LoginForm({
       )}
 
       <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
-        {/* Selector de Usuario (por Nombre) */}
+        {/* Selector de Usuario (por Nombre) con botón de refrescar lista */}
         <div className="flex flex-col gap-1">
-          <Label htmlFor="usuario" error={Boolean(usuarioError)} className="flex items-center gap-2">
-            <Icon name="person" size="18px" /> USUARIO
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="usuario" error={Boolean(usuarioError)} className="flex items-center gap-2">
+              <Icon name="person" size="18px" /> USUARIO
+            </Label>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  setLoadingUsuarios(true);
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    regs.forEach((r) => void r.update());
+                  }
+                  const res = await authApi.getUsuariosLogin();
+                  if (res.success && res.data) {
+                    setUsuariosList(res.data);
+                  }
+                } finally {
+                  setLoadingUsuarios(false);
+                }
+              }}
+              title="Recargar usuarios y verificar actualización"
+              disabled={loadingUsuarios}
+              className="group flex items-center gap-1 text-xs text-text-muted hover:text-marca-primario transition-colors disabled:opacity-50"
+            >
+              <Icon
+                name="refresh"
+                size="16px"
+                className={`transition-transform duration-500 ${loadingUsuarios ? 'animate-spin text-marca-primario' : 'group-hover:rotate-180'}`}
+              />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
+          </div>
           <Select
             id="usuario"
             name="usuario"
