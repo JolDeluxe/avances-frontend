@@ -77,9 +77,17 @@ export function UserResetPasswordModal({
       } else {
         setError(response.message || 'No se pudo restablecer la contraseña.');
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al restablecer contraseña.';
-      setError(msg);
+    } catch (err: any) {
+      if (err?.body?.errors && Array.isArray(err.body.errors)) {
+        const det = err.body.errors.map((e: any) => e.message).join('. ');
+        setError(`${err.body.message || 'Error de validación'}: ${det}`);
+      } else if (err?.body?.message) {
+        setError(err.body.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Error inesperado al restablecer contraseña.');
+      }
     } finally {
       setIsSubmitting(false);
     }

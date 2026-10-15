@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/icon';
 import { UserStatusBadge, UserRoleBadge, UserSegmentacionBadge } from './user-status-badge';
 import type { UsuarioItem } from '../types/users.types';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useAuth } from '@/features/auth/hooks/use-auth';
 
 export interface UserCardProps {
   user: UsuarioItem;
@@ -22,10 +23,14 @@ export function UserCard({
   onDeactivate,
   onReactivate,
 }: UserCardProps): ReactNode {
+  const { currentUser } = useAuth();
+  const isSuperAdminActor = currentUser?.rol === 'SUPER_ADMIN';
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('usuario:editar');
   const canDelete = hasPermission('usuario:eliminar');
-  const isSuperAdmin = user.rol.codigo === 'SUPER_ADMIN';
+  const isTargetSuperAdmin = user.rol.codigo === 'SUPER_ADMIN';
+  const canEditTarget = canEdit && (isSuperAdminActor || !isTargetSuperAdmin);
+  const canDeleteTarget = canDelete && (isSuperAdminActor || !isTargetSuperAdmin);
 
   return (
     <div className="bg-app-surface border border-border rounded-xl p-4 shadow-2xs space-y-3.5 hover:border-marca-primario/30 transition-all">
@@ -119,7 +124,7 @@ export function UserCard({
           Ver
         </Button>
 
-        {canEdit && !isSuperAdmin && (
+        {canEditTarget && (
           <Button
             variant="ghost"
             size="sm"
@@ -131,7 +136,7 @@ export function UserCard({
           </Button>
         )}
 
-        {canEdit && !isSuperAdmin && (
+        {canEditTarget && (
           <Button
             variant="ghost"
             size="sm"
@@ -143,7 +148,7 @@ export function UserCard({
           </Button>
         )}
 
-        {canDelete && !isSuperAdmin && (
+        {canDeleteTarget && (
           user.estado === 'ACTIVO' ? (
             <Button
               variant="ghost"

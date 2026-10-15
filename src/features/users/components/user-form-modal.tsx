@@ -227,8 +227,8 @@ export function UserFormModal({
           lineaProduccionIds: lineas,
           lineasAsignadas: lineas,
         };
-        if (password) {
-          payload.password = password;
+        if (password && password.trim() !== '') {
+          payload.password = password.trim();
         }
 
         const res = await usersApi.updateUser(user.id, payload);
@@ -241,7 +241,7 @@ export function UserFormModal({
       } else {
         const payload: CreateUserInput = {
           nombre: nombre.trim(),
-          password: password || undefined,
+          password: password && password.trim() !== '' ? password.trim() : undefined,
           rolId,
           departamentoId: departamentoId || undefined,
           tipoSurtidoAlmacen: tipoSurtidoCalculado,
@@ -258,9 +258,17 @@ export function UserFormModal({
           setError(res.message || 'Error al crear el usuario.');
         }
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al guardar usuario.';
-      setError(msg);
+    } catch (err: any) {
+      if (err?.body?.errors && Array.isArray(err.body.errors)) {
+        const det = err.body.errors.map((e: any) => e.message).join('. ');
+        setError(`${err.body.message || 'Error de validación'}: ${det}`);
+      } else if (err?.body?.message) {
+        setError(err.body.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Error inesperado al guardar usuario.');
+      }
     } finally {
       setIsSubmitting(false);
     }

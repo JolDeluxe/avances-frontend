@@ -15,10 +15,13 @@ import { UserDetailModal } from '../components/user-detail-modal';
 import { UserFormModal } from '../components/user-form-modal';
 import { UserResetPasswordModal } from '../components/user-reset-password-modal';
 import { UserDeactivateModal } from '../components/user-deactivate-modal';
+import { useAuth } from '@/features/auth/hooks/use-auth';
 import { usersApi } from '../api/users-api';
 import type { UsuarioItem } from '../types/users.types';
 
 export function UsersPage(): ReactNode {
+  const { currentUser } = useAuth();
+  const isSuperAdminActor = currentUser?.rol === 'SUPER_ADMIN';
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('usuario:crear');
   const canEdit = hasPermission('usuario:editar');
@@ -216,7 +219,9 @@ export function UsersPage(): ReactNode {
       header: 'Acciones',
       align: 'right',
       render: (row) => {
-        const isSuperAdmin = row.rol?.codigo === 'SUPER_ADMIN';
+        const isTargetSuperAdmin = row.rol?.codigo === 'SUPER_ADMIN';
+        const canEditTarget = canEdit && (isSuperAdminActor || !isTargetSuperAdmin);
+        const canDeleteTarget = canDelete && (isSuperAdminActor || !isTargetSuperAdmin);
 
         return (
           <div className="flex items-center justify-end gap-1">
@@ -230,7 +235,7 @@ export function UsersPage(): ReactNode {
               <Icon name="visibility" size="xs" />
             </Button>
 
-            {canEdit && !isSuperAdmin && (
+            {canEditTarget && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -242,7 +247,7 @@ export function UsersPage(): ReactNode {
               </Button>
             )}
 
-            {canEdit && !isSuperAdmin && (
+            {canEditTarget && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -254,7 +259,7 @@ export function UsersPage(): ReactNode {
               </Button>
             )}
 
-            {canDelete && !isSuperAdmin && (
+            {canDeleteTarget && (
               row.estado === 'ACTIVO' ? (
                 <Button
                   variant="ghost"
