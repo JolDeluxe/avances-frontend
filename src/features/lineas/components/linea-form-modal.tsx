@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils/cn';
 import type {
   LineaProduccionItem,
   DepartamentoWithLineas,
@@ -36,6 +37,9 @@ export function LineaFormModal({
   const [nombre, setNombre] = useState<string>('');
   const [departamentoId, setDepartamentoId] = useState<number>(0);
   const [area, setArea] = useState<AreaProduccion>('BOTA');
+  const [permiteDirectos, setPermiteDirectos] = useState<boolean>(true);
+  const [permiteIndirectos, setPermiteIndirectos] = useState<boolean>(true);
+  const [permiteBolsas, setPermiteBolsas] = useState<boolean>(false);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +50,17 @@ export function LineaFormModal({
         setNombre(linea.nombre.toUpperCase());
         setDepartamentoId(linea.departamentoId);
         setArea(linea.area);
+        setPermiteDirectos(linea.permiteDirectos ?? true);
+        setPermiteIndirectos(linea.permiteIndirectos ?? true);
+        setPermiteBolsas(linea.permiteBolsas ?? false);
       } else {
         setNombre('');
         const defaultDepto = departamentos.find((d) => d.estado === 'ACTIVO') || departamentos[0];
         setDepartamentoId(defaultDepto?.id || 0);
         setArea('BOTA');
+        setPermiteDirectos(true);
+        setPermiteIndirectos(true);
+        setPermiteBolsas(false);
       }
       setError(null);
       setIsSubmitting(false);
@@ -75,6 +85,11 @@ export function LineaFormModal({
       return;
     }
 
+    if (!permiteDirectos && !permiteIndirectos && !permiteBolsas) {
+      setError('Debe seleccionar al menos un tipo de material a separar (Directos, Indirectos o Bolsa).');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -82,6 +97,9 @@ export function LineaFormModal({
         const updatePayload: UpdateLineaInput = {
           nombre: cleanNombre,
           area,
+          permiteDirectos,
+          permiteIndirectos,
+          permiteBolsas,
         };
         const res = await onUpdate(linea.id, updatePayload);
         if (res.success) {
@@ -103,6 +121,9 @@ export function LineaFormModal({
           nombre: cleanNombre,
           departamentoId,
           area,
+          permiteDirectos,
+          permiteIndirectos,
+          permiteBolsas,
         };
         const res = await onCreate(createPayload);
         if (res.success) {
@@ -188,6 +209,104 @@ export function LineaFormModal({
               required
               className="uppercase tracking-wide"
             />
+          </div>
+
+          {/* Selección de Materiales */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-text-primary">
+                Materiales a Separar *
+              </Label>
+              <span className="text-2xs text-text-muted">
+                {[permiteDirectos, permiteIndirectos, permiteBolsas].filter(Boolean).length} de 3 activos
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Directos */}
+              <button
+                type="button"
+                onClick={() => setPermiteDirectos(!permiteDirectos)}
+                disabled={isSubmitting}
+                className={cn(
+                  'flex items-center justify-between p-2.5 rounded-lg border text-xs transition-all cursor-pointer select-none text-left',
+                  permiteDirectos
+                    ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-bold shadow-2xs'
+                    : 'bg-app-surface border-border text-text-muted hover:bg-app-surface-muted hover:text-text-secondary'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded flex items-center justify-center border transition-colors',
+                      permiteDirectos
+                        ? 'bg-marca-primario border-marca-primario text-white'
+                        : 'border-border bg-app-surface'
+                    )}
+                  >
+                    {permiteDirectos && <Icon name="check" size="12px" weight={700} />}
+                  </div>
+                  <span>Directos</span>
+                </div>
+                <span className="font-mono text-2xs opacity-75 font-semibold">DIR</span>
+              </button>
+
+              {/* Indirectos */}
+              <button
+                type="button"
+                onClick={() => setPermiteIndirectos(!permiteIndirectos)}
+                disabled={isSubmitting}
+                className={cn(
+                  'flex items-center justify-between p-2.5 rounded-lg border text-xs transition-all cursor-pointer select-none text-left',
+                  permiteIndirectos
+                    ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-bold shadow-2xs'
+                    : 'bg-app-surface border-border text-text-muted hover:bg-app-surface-muted hover:text-text-secondary'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded flex items-center justify-center border transition-colors',
+                      permiteIndirectos
+                        ? 'bg-marca-primario border-marca-primario text-white'
+                        : 'border-border bg-app-surface'
+                    )}
+                  >
+                    {permiteIndirectos && <Icon name="check" size="12px" weight={700} />}
+                  </div>
+                  <span>Indirectos</span>
+                </div>
+                <span className="font-mono text-2xs opacity-75 font-semibold">IND</span>
+              </button>
+
+              {/* Bolsa */}
+              <button
+                type="button"
+                onClick={() => setPermiteBolsas(!permiteBolsas)}
+                disabled={isSubmitting}
+                className={cn(
+                  'flex items-center justify-between p-2.5 rounded-lg border text-xs transition-all cursor-pointer select-none text-left',
+                  permiteBolsas
+                    ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-bold shadow-2xs'
+                    : 'bg-app-surface border-border text-text-muted hover:bg-app-surface-muted hover:text-text-secondary'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded flex items-center justify-center border transition-colors',
+                      permiteBolsas
+                        ? 'bg-marca-primario border-marca-primario text-white'
+                        : 'border-border bg-app-surface'
+                    )}
+                  >
+                    {permiteBolsas && <Icon name="check" size="12px" weight={700} />}
+                  </div>
+                  <span>Bolsa</span>
+                </div>
+                <span className="font-mono text-2xs opacity-75 font-semibold">BOL</span>
+              </button>
+            </div>
           </div>
         </ModalBody>
 

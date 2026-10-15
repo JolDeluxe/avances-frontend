@@ -9,6 +9,9 @@ export interface LineaProduccionItem {
   departamentoId: number;
   area: AreaProduccion;
   orden?: number;
+  permiteDirectos: boolean;
+  permiteIndirectos: boolean;
+  permiteBolsas: boolean;
   estado: EstadoRegistro;
   departamentoNombre?: string;
   departamentoCodigo?: string;
@@ -33,11 +36,17 @@ export interface CreateLineaInput {
   nombre: string;
   departamentoId: number;
   area: AreaProduccion;
+  permiteDirectos?: boolean;
+  permiteIndirectos?: boolean;
+  permiteBolsas?: boolean;
 }
 
 export interface UpdateLineaInput {
   nombre?: string;
   area?: AreaProduccion;
+  permiteDirectos?: boolean;
+  permiteIndirectos?: boolean;
+  permiteBolsas?: boolean;
   estado?: EstadoRegistro;
 }
 
