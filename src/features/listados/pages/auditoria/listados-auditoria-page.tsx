@@ -405,7 +405,7 @@ export function ListadosAuditoriaPage(): ReactNode {
 
       {/* ─── Barras Flotantes de Descuento Masivo (DIRECTOS e INDIRECTOS) ─── */}
       {(selectedDirectosIds.length > 0 || selectedIndirectosIds.length > 0) && (
-        <div className="sticky top-12 z-20 grid grid-cols-1 md:grid-cols-2 gap-3 py-1 bg-cuadra-arena/80 backdrop-blur-xs rounded-xl">
+        <div className="sticky top-2 z-30 grid grid-cols-1 md:grid-cols-2 gap-3 py-1">
           {/* Barra Lote DIRECTOS */}
           {selectedDirectosIds.length > 0 && (
             <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-app-surface border border-border/80 shadow-2xs">

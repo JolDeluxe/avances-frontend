@@ -1,6 +1,15 @@
 export type TipoFrenteSurtido = 'DIRECTOS' | 'INDIRECTOS' | 'BOLSAS';
 export type TipoSurtidoAlmacen = 'DIRECTOS' | 'INDIRECTOS' | 'BOLSAS' | 'TODOS' | string;
 export type TipoMaterialAuditor = 'DIRECTOS' | 'INDIRECTOS' | 'BOLSAS' | 'TODOS' | string;
+export type AreaValeAuth = 'BOTA' | 'ACCESORIOS' | 'OTRO';
+
+export interface DepartamentoValeAuthSimple {
+  id: number;
+  codigo: string;
+  nombre: string;
+  areaFija?: AreaValeAuth | null;
+  requiereSeleccionArea?: boolean;
+}
 
 /** Indica si un valor multi-frente (ej. "DIRECTOS,BOLSAS" o "TODOS") autoriza el frente dado. */
 export function frenteAutorizado(valor: string | null | undefined, frente: string): boolean {
@@ -20,6 +29,8 @@ export interface UsuarioAuth {
   tipoSurtidoAlmacen?: TipoSurtidoAlmacen | null;
   tipoMaterialAuditor?: TipoMaterialAuditor | null;
   lineasAsignadas?: { id: number; codigo: string; nombre: string; area?: string }[];
+  areasVale?: AreaValeAuth[];
+  departamentosValeAsignados?: DepartamentoValeAuthSimple[];
   permisos?: string[];
   activo?: boolean;
   imagen?: string;
@@ -36,6 +47,8 @@ export interface BackendUsuarioPayload {
   tipoSurtidoAlmacen?: TipoSurtidoAlmacen | null;
   tipoMaterialAuditor?: TipoMaterialAuditor | null;
   lineasAsignadas?: { id: number; codigo: string; nombre: string; area?: string }[];
+  areasVale?: AreaValeAuth[];
+  departamentosValeAsignados?: DepartamentoValeAuthSimple[];
   permisos?: string[];
   activo?: boolean;
   imagen?: string;

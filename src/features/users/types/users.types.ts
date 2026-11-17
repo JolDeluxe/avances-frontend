@@ -1,11 +1,14 @@
 import type {
   TipoSurtidoAlmacen,
   TipoMaterialAuditor,
+  AreaValeAuth,
 } from '@/features/auth/types/auth.types';
 
-export type { TipoSurtidoAlmacen, TipoMaterialAuditor };
+export type { TipoSurtidoAlmacen, TipoMaterialAuditor, AreaValeAuth };
 
 export type EstadoUsuario = 'ACTIVO' | 'INACTIVO';
+
+export type AccionExcepcionPermiso = 'CONCEDER' | 'DENEGAR';
 
 export interface RolSimple {
   id: number;
@@ -23,11 +26,21 @@ export interface LineaProduccionSimple {
   departamentoId?: number;
 }
 
+export interface DepartamentoValeCatalogSimple {
+  id: number;
+  codigo: string;
+  nombre: string;
+  areaFija: AreaValeAuth | null;
+  requiereSeleccionArea: boolean;
+  departamentoId?: number;
+}
+
 export interface DepartamentoSimple {
   id: number;
   codigo: string;
   nombre: string;
   lineasProduccion?: LineaProduccionSimple[];
+  departamentosVale?: DepartamentoValeCatalogSimple[];
 }
 
 export interface PermisoSimple {
@@ -35,6 +48,15 @@ export interface PermisoSimple {
   codigo: string;
   modulo: string;
   descripcion: string;
+}
+
+export interface ExcepcionPermisoItem {
+  id?: number;
+  permisoId: number;
+  codigo?: string;
+  modulo?: string;
+  descripcion?: string;
+  accion: AccionExcepcionPermiso;
 }
 
 export interface UsuarioItem {
@@ -47,6 +69,10 @@ export interface UsuarioItem {
   tipoSurtidoAlmacen?: TipoSurtidoAlmacen | null;
   tipoMaterialAuditor?: TipoMaterialAuditor | null;
   lineasAsignadas: LineaProduccionSimple[];
+  areasVale?: AreaValeAuth[];
+  departamentosValeAsignados?: DepartamentoValeCatalogSimple[];
+  excepcionesPermiso?: ExcepcionPermisoItem[];
+  permisosEfectivos?: string[];
   fechaCreacion?: string;
   fechaActualizacion?: string;
 }
@@ -79,6 +105,9 @@ export interface CreateUserInput {
   tipoMaterialAuditor?: TipoMaterialAuditor | null;
   lineasAsignadas?: number[];
   lineaProduccionIds?: number[];
+  areasVale?: AreaValeAuth[];
+  departamentosValeIds?: number[];
+  excepciones?: Array<{ permisoId: number; accion: AccionExcepcionPermiso }>;
 }
 
 export interface UpdateUserInput {
@@ -91,6 +120,9 @@ export interface UpdateUserInput {
   tipoMaterialAuditor?: TipoMaterialAuditor | null;
   lineasAsignadas?: number[];
   lineaProduccionIds?: number[];
+  areasVale?: AreaValeAuth[];
+  departamentosValeIds?: number[];
+  excepciones?: Array<{ permisoId: number; accion: AccionExcepcionPermiso }>;
   permisosOtorgados?: string[];
   permisosRevocados?: string[];
 }

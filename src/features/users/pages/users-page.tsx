@@ -49,7 +49,7 @@ export function UsersPage(): ReactNode {
     resetFilters,
   } = useUsers();
 
-  const { roles, departamentos } = useUserCatalogs();
+  const { roles, departamentos, permisos } = useUserCatalogs();
 
   // Modals state
   const [selectedUser, setSelectedUser] = useState<UsuarioItem | null>(null);
@@ -685,6 +685,7 @@ export function UsersPage(): ReactNode {
         user={formUser}
         roles={roles}
         departamentos={departamentos}
+        permisos={permisos}
         onSuccess={() => {
           showFeedback(
             'success',

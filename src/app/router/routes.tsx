@@ -55,6 +55,45 @@ const ProyeccionPendientesPage = lazy(() =>
   })),
 );
 
+const ValesLayoutPage = lazy(() =>
+  import('@/features/vales/pages/vales-layout-page').then((m) => ({ default: m.ValesLayoutPage })),
+);
+const ValesAdministracionPage = lazy(() =>
+  import('@/features/vales/pages/administracion/vales-administracion-page').then((m) => ({
+    default: m.ValesAdministracionPage,
+  })),
+);
+const ValesPendientesPage = lazy(() =>
+  import('@/features/vales/pages/pendientes/vales-pendientes-page').then((m) => ({
+    default: m.ValesPendientesPage,
+  })),
+);
+const ValesAlmacenPage = lazy(() =>
+  import('@/features/vales/pages/almacen/vales-almacen-page').then((m) => ({
+    default: m.ValesAlmacenPage,
+  })),
+);
+const ValesAuditoriaPage = lazy(() =>
+  import('@/features/vales/pages/auditoria/vales-auditoria-page').then((m) => ({
+    default: m.ValesAuditoriaPage,
+  })),
+);
+const ValesHistorialPage = lazy(() =>
+  import('@/features/vales/pages/historial/vales-historial-page').then((m) => ({
+    default: m.ValesHistorialPage,
+  })),
+);
+const MonitorValesPendientesPage = lazy(() =>
+  import('@/features/vales/pages/monitor/monitor-pendientes-page').then((m) => ({
+    default: m.MonitorValesPendientesPage,
+  })),
+);
+const ProyeccionValesPendientesPage = lazy(() =>
+  import('@/features/vales/pages/monitor/proyeccion-pendientes-page').then((m) => ({
+    default: m.ProyeccionValesPendientesPage,
+  })),
+);
+
 /** Fallback visual ligero durante la carga asíncrona de chunks de ruta */
 function RouteLoadingFallback() {
   return (
@@ -101,6 +140,32 @@ function ListadosIndexRedirect() {
   }
 
   return <Navigate to={ROUTES.LISTADOS_PENDIENTES} replace />;
+}
+
+/**
+ * Componente de redirección de índice para el módulo Vales basado en permisos efectivos y rol.
+ */
+function ValesIndexRedirect() {
+  const { rol, can, canAny } = usePermissions();
+  const session = useAuthSession();
+
+  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN') {
+    return <Navigate to={ROUTES.VALES_PENDIENTES} replace />;
+  }
+
+  if (rol === 'REGISTRADOR' && canAny(PERMISOS.VALE_CREAR, PERMISOS.VALE_EDITAR)) {
+    return <Navigate to={ROUTES.VALES_ADMINISTRACION} replace />;
+  }
+
+  if (rol === 'AUDITOR' && can(PERMISOS.VALE_DESCONTAR)) {
+    return <Navigate to={ROUTES.VALES_AUDITORIA} replace />;
+  }
+
+  if (rol === 'ALMACENISTA' && canAny(PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR)) {
+    return <Navigate to={ROUTES.VALES_ALMACEN} replace />;
+  }
+
+  return <Navigate to={ROUTES.VALES_PENDIENTES} replace />;
 }
 
 /**
@@ -271,6 +336,107 @@ export const routes: RouteObject[] = [
                   >
                     {withSuspense(<ListadosHistorialPage />)}
                   </RequireRole>
+                ),
+              },
+            ],
+          },
+          {
+            // Monitor Kiosco de Vales Pendientes
+            path: ROUTES.MONITOR_VALES_PENDIENTES,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.VALE_VER}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<MonitorValesPendientesPage />)}
+              </RequirePermission>
+            ),
+          },
+          {
+            // Proyección de Vales Pendientes
+            path: ROUTES.PROYECCION_VALES,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.VALE_VER}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<ProyeccionValesPendientesPage />)}
+              </RequirePermission>
+            ),
+          },
+          {
+            // Módulo Vales — layout con navegación interna y guards por permisos efectivos
+            path: ROUTES.VALES,
+            element: (
+              <RequirePermission
+                permission={PERMISOS.VALE_VER}
+                fallbackRoute={ROUTES.LISTADOS}
+              >
+                {withSuspense(<ValesLayoutPage />)}
+              </RequirePermission>
+            ),
+            children: [
+              {
+                index: true,
+                element: <ValesIndexRedirect />,
+              },
+              {
+                path: ROUTES.VALES_ADMINISTRACION,
+                element: (
+                  <RequirePermission
+                    anyPermission={[
+                      PERMISOS.VALE_CREAR,
+                      PERMISOS.VALE_EDITAR,
+                      PERMISOS.VALE_CANCELAR,
+                    ]}
+                    fallbackRoute={ROUTES.VALES}
+                  >
+                    {withSuspense(<ValesAdministracionPage />)}
+                  </RequirePermission>
+                ),
+              },
+              {
+                path: ROUTES.VALES_PENDIENTES,
+                element: (
+                  <RequirePermission
+                    permission={PERMISOS.VALE_VER}
+                    fallbackRoute={ROUTES.LISTADOS}
+                  >
+                    {withSuspense(<ValesPendientesPage />)}
+                  </RequirePermission>
+                ),
+              },
+              {
+                path: ROUTES.VALES_ALMACEN,
+                element: (
+                  <RequirePermission
+                    anyPermission={[PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR]}
+                    fallbackRoute={ROUTES.VALES}
+                  >
+                    {withSuspense(<ValesAlmacenPage />)}
+                  </RequirePermission>
+                ),
+              },
+              {
+                path: ROUTES.VALES_AUDITORIA,
+                element: (
+                  <RequirePermission
+                    permission={PERMISOS.VALE_DESCONTAR}
+                    fallbackRoute={ROUTES.VALES}
+                  >
+                    {withSuspense(<ValesAuditoriaPage />)}
+                  </RequirePermission>
+                ),
+              },
+              {
+                path: ROUTES.VALES_HISTORIAL,
+                element: (
+                  <RequirePermission
+                    permission={PERMISOS.VALE_VER}
+                    fallbackRoute={ROUTES.VALES}
+                  >
+                    {withSuspense(<ValesHistorialPage />)}
+                  </RequirePermission>
                 ),
               },
             ],

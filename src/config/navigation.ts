@@ -16,6 +16,13 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     permission: PERMISOS.LISTADO_VER,
   },
   {
+    id: 'vales',
+    name: 'Vales',
+    icon: 'receipt_long',
+    route: ROUTES.VALES,
+    permission: PERMISOS.VALE_VER,
+  },
+  {
     id: 'proyeccion',
     name: 'Proyectar',
     icon: 'tv',

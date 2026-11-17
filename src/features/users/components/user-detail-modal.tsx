@@ -259,6 +259,59 @@ export function UserDetailModal({
               </div>
             )}
           </div>
+
+          {/* Alcance Operativo de Vales */}
+          {user.rol?.codigo === 'ALMACENISTA' && (
+            <div className="pt-3 border-t border-border/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+                  <Icon name="receipt_long" size="xs" className="text-text-muted" />
+                  Alcance Operativo de Vales
+                </span>
+                <span className="text-[11px] font-medium text-text-muted">
+                  {(user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0
+                    ? 'Sin alcance asignado'
+                    : `${user.areasVale?.length ?? 0} área(s) · ${user.departamentosValeAsignados?.length ?? 0} depto(s)`}
+                </span>
+              </div>
+
+              {(user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0 ? (
+                <div className="p-2.5 rounded-lg bg-app-surface-muted/40 border border-border/60 text-xs text-text-muted italic">
+                  Sin áreas ni departamentos de Vales autorizados (política deny-by-default).
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {user.areasVale && user.areasVale.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold uppercase text-text-muted mr-1">Áreas:</span>
+                      {user.areasVale.map((area) => (
+                        <span
+                          key={area}
+                          className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-marca-primario/10 text-marca-primario border border-marca-primario/25"
+                        >
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {user.departamentosValeAsignados && user.departamentosValeAsignados.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold uppercase text-text-muted mr-1">Deptos.:</span>
+                      {user.departamentosValeAsignados.map((depto) => (
+                        <span
+                          key={depto.id}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-cuadra-arena/50 text-text-primary border border-border/80"
+                        >
+                          {depto.nombre}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Credentials & Password Reveal Section */}

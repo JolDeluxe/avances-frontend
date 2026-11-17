@@ -15,14 +15,20 @@ export function usePermissions() {
     return permisos.includes(codigo);
   };
 
-  const canAny = (...codigos: (PermisoCodigo | string)[]): boolean => {
+  const canAny = (
+    ...codigos: (PermisoCodigo | string | (PermisoCodigo | string)[])[]
+  ): boolean => {
     if (isSuperAdmin) return true;
-    return codigos.some((codigo) => permisos.includes(codigo));
+    const flatCodigos = codigos.flat();
+    return flatCodigos.some((codigo) => permisos.includes(codigo));
   };
 
-  const canAll = (...codigos: (PermisoCodigo | string)[]): boolean => {
+  const canAll = (
+    ...codigos: (PermisoCodigo | string | (PermisoCodigo | string)[])[]
+  ): boolean => {
     if (isSuperAdmin) return true;
-    return codigos.every((codigo) => permisos.includes(codigo));
+    const flatCodigos = codigos.flat();
+    return flatCodigos.every((codigo) => permisos.includes(codigo));
   };
 
   return {

@@ -14,6 +14,10 @@ import type {
   RolSimple,
   DepartamentoSimple,
   LineaProduccionSimple,
+  DepartamentoValeCatalogSimple,
+  PermisoSimple,
+  AreaValeAuth,
+  AccionExcepcionPermiso,
 } from '../types/users.types';
 
 import { useAuth } from '@/features/auth/hooks/use-auth';
@@ -24,8 +28,15 @@ export interface UserFormModalProps {
   user: UsuarioItem | null; // If null => create mode, else edit mode
   roles: RolSimple[];
   departamentos: DepartamentoSimple[];
+  permisos?: PermisoSimple[];
   onSuccess: () => void;
 }
+
+const AREAS_VALE_OPTIONS: Array<{ id: AreaValeAuth; label: string }> = [
+  { id: 'BOTA', label: 'Área Bota' },
+  { id: 'ACCESORIOS', label: 'Área Accesorios' },
+  { id: 'OTRO', label: 'Área Otro' },
+];
 
 export function UserFormModal({
   isOpen,
@@ -33,6 +44,7 @@ export function UserFormModal({
   user,
   roles,
   departamentos,
+  permisos = [],
   onSuccess,
 }: UserFormModalProps): ReactNode {
   const { currentUser } = useAuth();
@@ -53,14 +65,27 @@ export function UserFormModal({
   const [frentesAuditor, setFrentesAuditor] = useState<string[]>([]);
   const [lineasAsignadas, setLineasAsignadas] = useState<number[]>([]);
 
+  // Alcance acumulativo del módulo VALES
+  const [areasVale, setAreasVale] = useState<AreaValeAuth[]>([]);
+  const [departamentosValeIds, setDepartamentosValeIds] = useState<number[]>([]);
+
+  // Excepciones de permisos individuales (CONCEDER / DENEGAR)
+  const [excepcionesMap, setExcepcionesMap] = useState<Record<number, AccionExcepcionPermiso>>({});
+  const [showExcepciones, setShowExcepciones] = useState<boolean>(false);
+
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Available lines based on selected department
   const availableLines: (LineaProduccionSimple & { area?: string })[] = departamentoId
-    ? (departamentos.find((d) => d.id === departamentoId)?.lineasProduccion as any) || []
-    : (departamentos.flatMap((d) => d.lineasProduccion || []) as any);
+    ? departamentos.find((d) => d.id === departamentoId)?.lineasProduccion || []
+    : departamentos.flatMap((d) => d.lineasProduccion || []);
+
+  // Available departamentos operativos de Vales based on selected department
+  const availableDepartamentosVale: DepartamentoValeCatalogSimple[] = departamentoId
+    ? departamentos.find((d) => d.id === departamentoId)?.departamentosVale || []
+    : departamentos.flatMap((d) => d.departamentosVale || []);
 
   const selectedRole = availableRoles.find((r) => r.id === rolId);
   const isAlmacenista = selectedRole?.codigo === 'ALMACENISTA';
@@ -100,14 +125,42 @@ export function UserFormModal({
             ? user.lineasAsignadas.filter((l) => activeLinesIds.has(l.id)).map((l) => l.id)
             : [],
         );
+
+        setAreasVale(user.areasVale ?? []);
+        setDepartamentosValeIds(
+          user.departamentosValeAsignados ? user.departamentosValeAsignados.map((d) => d.id) : [],
+        );
+
+        // Cargar detalle completo del usuario para hidratar excepciones de permisos si existen
+        setExcepcionesMap({});
+        setShowExcepciones(false);
+        usersApi
+          .getUserById(user.id)
+          .then((res) => {
+            if (res.success && res.data) {
+              if (res.data.areasVale) setAreasVale(res.data.areasVale);
+              if (res.data.departamentosValeAsignados) {
+                setDepartamentosValeIds(res.data.departamentosValeAsignados.map((d) => d.id));
+              }
+              if (res.data.excepcionesPermiso && res.data.excepcionesPermiso.length > 0) {
+                const map: Record<number, AccionExcepcionPermiso> = {};
+                res.data.excepcionesPermiso.forEach((exc) => {
+                  map[exc.permisoId] = exc.accion;
+                });
+                setExcepcionesMap(map);
+                setShowExcepciones(true);
+              }
+            }
+          })
+          .catch(() => {
+            // Silencioso: conserva datos base de la fila
+          });
       } else {
         setNombre('');
         setPassword('');
-        // Seleccionar por defecto el primer rol permitido (no SUPER_ADMIN)
         const defaultRol = availableRoles.find((r) => r.codigo !== 'SUPER_ADMIN') || availableRoles[0];
         setRolId(defaultRol?.id || 0);
 
-        // Autoasignar departamento del usuario actual si no es SUPER_ADMIN o primer departamento
         const defaultDeptoId = currentUser?.departamentoId || departamentos[0]?.id;
         setDepartamentoId(defaultDeptoId);
 
@@ -122,6 +175,10 @@ export function UserFormModal({
           setFrentesAuditor([]);
         }
         setLineasAsignadas([]);
+        setAreasVale([]);
+        setDepartamentosValeIds([]);
+        setExcepcionesMap({});
+        setShowExcepciones(false);
       }
       setShowPassword(false);
       setIsSubmitting(false);
@@ -142,13 +199,14 @@ export function UserFormModal({
       setFrentesSurtido([]);
       setFrentesAuditor([]);
       setLineasAsignadas([]);
+      setAreasVale([]);
+      setDepartamentosValeIds([]);
     }
   };
 
   const handleToggleFrente = (frente: string) => {
     setFrentesSurtido((prev) => {
       const next = prev.includes(frente) ? prev.filter((f) => f !== frente) : [...prev, frente];
-      // Si el nuevo estado es exclusivamente BOLSAS, remover automáticamente cualquier línea de área BOTA seleccionada
       if (next.length === 1 && next[0] === 'BOLSAS') {
         const lineasBotaIds = new Set(
           availableLines.filter((l) => l.area === 'BOTA').map((l) => l.id),
@@ -171,12 +229,46 @@ export function UserFormModal({
     );
   };
 
+  const handleToggleAreaVale = (area: AreaValeAuth) => {
+    setAreasVale((prev) =>
+      prev.includes(area) ? prev.filter((item) => item !== area) : [...prev, area],
+    );
+  };
+
+  const handleToggleDeptoVale = (id: number) => {
+    setDepartamentosValeIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+
+  const handleCyclePermisoExcepcion = (permiso: PermisoSimple, isBase: boolean) => {
+    setExcepcionesMap((prev) => {
+      const current = prev[permiso.id];
+      const next = { ...prev };
+      if (isBase) {
+        // Si el rol ya lo incluye por defecto: alternar entre Heredado (undefined) y DENEGAR
+        if (current === 'DENEGAR') {
+          delete next[permiso.id];
+        } else {
+          next[permiso.id] = 'DENEGAR';
+        }
+      } else {
+        // Si el rol NO lo incluye por defecto: alternar entre No asignado (undefined) y CONCEDER
+        if (current === 'CONCEDER') {
+          delete next[permiso.id];
+        } else {
+          next[permiso.id] = 'CONCEDER';
+        }
+      }
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
-    // Validaciones de negocio
     if (isAlmacenista && frentesSurtido.length === 0) {
       setError('Seleccione al menos un tipo de surtido.');
       setIsSubmitting(false);
@@ -189,11 +281,9 @@ export function UserFormModal({
       return;
     }
 
-    // Regla de incompatibilidad BOLSAS + BOTA: Solo si es exclusivamente BOLSAS
     const soloBolsas = frentesSurtido.length === 1 && frentesSurtido[0] === 'BOLSAS';
     let lineasValidas = lineasAsignadas;
     if (isAlmacenista && soloBolsas) {
-      // Excluir automáticamente cualquier línea residual de área BOTA
       const lineasBotaIds = new Set(
         availableLines.filter((l) => l.area === 'BOTA').map((l) => l.id),
       );
@@ -217,6 +307,17 @@ export function UserFormModal({
           : frentesAuditor.join(',')
         : null;
 
+      const activeDeptoValeIdsSet = new Set(availableDepartamentosVale.map((d) => d.id));
+      const deptosValeValidos = isAlmacenista
+        ? departamentosValeIds.filter((id) => activeDeptoValeIdsSet.has(id))
+        : [];
+      const areasValeValidas = isAlmacenista ? areasVale : [];
+
+      const excepcionesArray = Object.entries(excepcionesMap).map(([permIdStr, accion]) => ({
+        permisoId: Number(permIdStr),
+        accion,
+      }));
+
       if (isEditing && user) {
         const payload: UpdateUserInput = {
           nombre: nombre.trim(),
@@ -226,6 +327,9 @@ export function UserFormModal({
           tipoMaterialAuditor: tipoMaterialAuditorCalculado,
           lineaProduccionIds: lineas,
           lineasAsignadas: lineas,
+          areasVale: areasValeValidas,
+          departamentosValeIds: deptosValeValidos,
+          excepciones: excepcionesArray,
         };
         if (password && password.trim() !== '') {
           payload.password = password.trim();
@@ -248,6 +352,9 @@ export function UserFormModal({
           tipoMaterialAuditor: tipoMaterialAuditorCalculado,
           lineaProduccionIds: lineas,
           lineasAsignadas: lineas,
+          areasVale: areasValeValidas,
+          departamentosValeIds: deptosValeValidos,
+          excepciones: excepcionesArray.length > 0 ? excepcionesArray : undefined,
         };
 
         const res = await usersApi.createUser(payload);
@@ -258,12 +365,13 @@ export function UserFormModal({
           setError(res.message || 'Error al crear el usuario.');
         }
       }
-    } catch (err: any) {
-      if (err?.body?.errors && Array.isArray(err.body.errors)) {
-        const det = err.body.errors.map((e: any) => e.message).join('. ');
-        setError(`${err.body.message || 'Error de validación'}: ${det}`);
-      } else if (err?.body?.message) {
-        setError(err.body.message);
+    } catch (err: unknown) {
+      const apiErr = err as { body?: { message?: string; errors?: Array<{ message: string }> } };
+      if (apiErr?.body?.errors && Array.isArray(apiErr.body.errors)) {
+        const det = apiErr.body.errors.map((e) => e.message).join('. ');
+        setError(`${apiErr.body.message || 'Error de validación'}: ${det}`);
+      } else if (apiErr?.body?.message) {
+        setError(apiErr.body.message);
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -273,6 +381,9 @@ export function UserFormModal({
       setIsSubmitting(false);
     }
   };
+
+  const permisosBaseRol = new Set(selectedRole?.permisosBase ?? []);
+  const excepcionesCount = Object.keys(excepcionesMap).length;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-xl">
@@ -343,10 +454,10 @@ export function UserFormModal({
                 onChange={(e) => handleRoleChange(Number(e.target.value))}
                 required
               >
-                {roles.map((r) => {
+                {availableRoles.map((r) => {
                   let label = r.nombre;
                   if (r.codigo === 'ADMIN') label = 'Administrador';
-                  else if (r.codigo === 'REGISTRADOR') label = 'Registrador de Listados';
+                  else if (r.codigo === 'REGISTRADOR') label = 'Registrador';
                   else if (r.codigo === 'ALMACENISTA') label = 'Almacenistas';
                   else if (r.codigo === 'AUDITOR') label = 'Auditor';
                   else if (r.codigo === 'SUPER_ADMIN') label = 'Super Admin';
@@ -389,7 +500,7 @@ export function UserFormModal({
             <div className="space-y-2 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider">
-                  Tipo de Surtido Autorizado *
+                  Tipo de Surtido Autorizado (Listados) *
                 </Label>
                 <span className="text-2xs text-text-muted">
                   {frentesSurtido.length} seleccionado(s)
@@ -471,7 +582,7 @@ export function UserFormModal({
             <div className="space-y-3 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider">
-                  Líneas de Producción Autorizadas *
+                  Líneas de Producción Autorizadas (Listados)
                 </Label>
                 <span className="text-2xs text-text-muted">
                   {lineasAsignadas.length} seleccionada(s)
@@ -570,6 +681,211 @@ export function UserFormModal({
                     ? 'No hay líneas de producción configuradas en este departamento.'
                     : 'Selecciona un departamento para ver sus líneas de producción.'}
                 </p>
+              )}
+            </div>
+          )}
+
+          {/* Alcance Acumulativo del Módulo VALES para ALMACENISTA */}
+          {isAlmacenista && (
+            <div className="space-y-3 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider block">
+                    Alcance Operativo de Vales (Acumulativo)
+                  </Label>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Puedes autorizar áreas completas y/o departamentos individuales adicionales.
+                  </p>
+                </div>
+                <span className="text-2xs font-mono text-text-muted shrink-0">
+                  {areasVale.length} área(s) · {departamentosValeIds.length} depto(s)
+                </span>
+              </div>
+
+              {/* 1. Áreas completas de Vales */}
+              <div className="space-y-1.5">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-text-secondary block">
+                  Áreas completas autorizadas
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {AREAS_VALE_OPTIONS.map((areaOpt) => {
+                    const isChecked = areasVale.includes(areaOpt.id);
+                    return (
+                      <label
+                        key={areaOpt.id}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          isChecked
+                            ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-medium'
+                            : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleAreaVale(areaOpt.id)}
+                          className="rounded border-border text-marca-primario focus:ring-marca-primario/25 h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span>{areaOpt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Departamentos Operativos Individuales de Vales */}
+              {availableDepartamentosVale.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-secondary block">
+                    Departamentos operativos específicos
+                  </span>
+                  {(() => {
+                    const deptosBota = availableDepartamentosVale.filter((d) => d.areaFija === 'BOTA');
+                    const deptosAcc = availableDepartamentosVale.filter(
+                      (d) => d.areaFija === 'ACCESORIOS' || d.requiereSeleccionArea || d.areaFija === 'OTRO',
+                    );
+
+                    const renderDeptoItem = (depto: DepartamentoValeCatalogSimple) => {
+                      const isChecked = departamentosValeIds.includes(depto.id);
+                      return (
+                        <label
+                          key={depto.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-medium'
+                              : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleDeptoVale(depto.id)}
+                            className="rounded border-border text-marca-primario focus:ring-marca-primario/25 h-3.5 w-3.5 cursor-pointer"
+                          />
+                          <span className="truncate">{depto.nombre}</span>
+                          {depto.requiereSeleccionArea && (
+                            <span className="ml-auto text-3xs font-mono px-1 py-0.2 rounded bg-amber-500/15 text-amber-700">
+                              Área por vale
+                            </span>
+                          )}
+                        </label>
+                      );
+                    };
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
+                          <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                            <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-marca-primario inline-block"></span>
+                              Deptos. Bota
+                            </span>
+                            <span className="text-3xs text-text-muted">
+                              {deptosBota.filter((d) => departamentosValeIds.includes(d.id)).length} / {deptosBota.length}
+                            </span>
+                          </div>
+                          {deptosBota.length > 0 ? (
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                              {deptosBota.map(renderDeptoItem)}
+                            </div>
+                          ) : (
+                            <p className="text-2xs text-text-muted italic py-1">Sin departamentos</p>
+                          )}
+                        </div>
+
+                        <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
+                          <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                            <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cuadra-oro inline-block"></span>
+                              Deptos. Accesorios / Otros
+                            </span>
+                            <span className="text-3xs text-text-muted">
+                              {deptosAcc.filter((d) => departamentosValeIds.includes(d.id)).length} / {deptosAcc.length}
+                            </span>
+                          </div>
+                          {deptosAcc.length > 0 ? (
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                              {deptosAcc.map(renderDeptoItem)}
+                            </div>
+                          ) : (
+                            <p className="text-2xs text-text-muted italic py-1">Sin departamentos</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Excepciones de Permisos Efectivos por Usuario */}
+          {permisos.length > 0 && selectedRole?.codigo !== 'SUPER_ADMIN' && (
+            <div className="rounded-xl border border-border bg-app-surface overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowExcepciones((prev) => !prev)}
+                className="w-full px-3.5 py-2.5 bg-cuadra-arena/25 hover:bg-cuadra-arena/40 flex items-center justify-between text-left transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="tune" size="xs" className="text-brand-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+                    Permisos Efectivos y Excepciones
+                  </span>
+                  {excepcionesCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-2xs font-bold bg-brand-primary/15 text-brand-primary">
+                      {excepcionesCount} excepción(es)
+                    </span>
+                  )}
+                </div>
+                <Icon
+                  name={showExcepciones ? 'expand_less' : 'expand_more'}
+                  size="sm"
+                  className="text-text-muted"
+                />
+              </button>
+
+              {showExcepciones && (
+                <div className="p-3.5 space-y-3 border-t border-border/60">
+                  <p className="text-[11px] text-text-muted">
+                    Haz clic en un permiso para conceder un permiso adicional al rol o denegar uno heredado.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {permisos.map((permiso) => {
+                      const isBase = permisosBaseRol.has(permiso.codigo);
+                      const exc = excepcionesMap[permiso.id];
+                      const isEffective = (isBase && exc !== 'DENEGAR') || exc === 'CONCEDER';
+
+                      return (
+                        <button
+                          key={permiso.id}
+                          type="button"
+                          onClick={() => handleCyclePermisoExcepcion(permiso, isBase)}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-left text-xs transition-colors cursor-pointer ${
+                            exc === 'CONCEDER'
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-semibold'
+                              : exc === 'DENEGAR'
+                              ? 'bg-danger/10 border-danger/30 text-danger line-through'
+                              : isEffective
+                              ? 'bg-app-surface-muted/60 border-border text-text-primary'
+                              : 'bg-app-surface border-border/60 text-text-muted hover:text-text-secondary'
+                          }`}
+                          title={permiso.descripcion}
+                        >
+                          <span className="font-mono text-[11px] truncate">{permiso.codigo}</span>
+                          <span className="text-[10px] uppercase font-bold shrink-0">
+                            {exc === 'CONCEDER'
+                              ? '+ Concedido'
+                              : exc === 'DENEGAR'
+                              ? '− Denegado'
+                              : isBase
+                              ? 'Rol base'
+                              : 'Inactivo'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
           )}

@@ -48,6 +48,28 @@ export const ROUTES = {
   /** Módulo PROYECCIÓN (Pantallas de planta y monitores de proyección) */
   PROYECCION: '/proyeccion',
   PROYECCION_PENDIENTES: '/proyeccion/pendientes',
+  PROYECCION_VALES: '/proyeccion/vales',
+
+  /** Módulo de Vales — layout raíz */
+  VALES: '/vales',
+
+  /** Submódulo de Vales: registro y edición en estado pendiente */
+  VALES_ADMINISTRACION: '/vales/administracion',
+
+  /** Submódulo de Vales: operación de almacén (Separar / Entregar) */
+  VALES_ALMACEN: '/vales/almacen',
+
+  /** Submódulo de Vales: vista general de pendientes */
+  VALES_PENDIENTES: '/vales/pendientes',
+
+  /** Submódulo de Vales: auditoría y confirmación de descuento en ERP */
+  VALES_AUDITORIA: '/vales/auditoria',
+
+  /** Submódulo de Vales: historial completo */
+  VALES_HISTORIAL: '/vales/historial',
+
+  /** Monitor de Vales Pendientes */
+  MONITOR_VALES_PENDIENTES: '/monitor-vales-pendientes',
 
   /** Ruta catch-all para páginas no encontradas */
   NOT_FOUND: '*',

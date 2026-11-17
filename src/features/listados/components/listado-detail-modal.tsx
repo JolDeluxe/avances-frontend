@@ -3,6 +3,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/moda
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { FrenteStatusBadge } from '@/components/ui/status-badge';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import { PERMISOS } from '@/config/permissions';
@@ -30,6 +31,20 @@ function formatFechaLocal(fechaStr?: string | null): string {
   const [year, month, day] = solo.split('-');
   if (!year || !month || !day) return String(fechaStr);
   return `${day}/${month}/${year}`;
+}
+
+/**
+ * Retorna true si el timestamp corresponde a un registro histórico (medianoche pura UTC o sin hora explícita).
+ */
+function isTimestampHistorico(isoStr?: string | null): boolean {
+  if (!isoStr) return false;
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return false;
+    return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+  } catch {
+    return false;
+  }
 }
 
 function formatTimestamp(isoStr: string): string {
@@ -350,9 +365,49 @@ export function ListadoDetailModal({
           </div>
 
           {isLoadingDetalle ? (
-            <div className="flex items-center justify-center gap-2 text-xs text-text-muted py-6">
-              <Spinner size="14px" />
-              <span>Cargando materiales...</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+              <div className="p-4 rounded-xl border border-border bg-app-surface space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 py-2 px-2.5 rounded-lg bg-app-surface-muted/60">
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-full rounded-lg" />
+              </div>
+              <div className="p-4 rounded-xl border border-border bg-app-surface space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 py-2 px-2.5 rounded-lg bg-app-surface-muted/60">
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-full rounded-lg" />
+              </div>
             </div>
           ) : frentesVisibles.length === 0 ? (
             <div className="p-5 rounded-xl bg-app-surface border border-dashed border-border text-center text-xs text-text-muted">
@@ -402,7 +457,9 @@ export function ListadoDetailModal({
                         {frente.fechaSeparado ? (
                           <div
                             title={`${formatTimestamp(frente.fechaSeparado)}${
-                              frente.separadoPor ? ` - ${frente.separadoPor.nombre || frente.separadoPor.usuario}` : ''
+                              frente.separadoPor && !isTimestampHistorico(frente.fechaSeparado)
+                                ? ` - ${frente.separadoPor.nombre || frente.separadoPor.usuario}`
+                                : ''
                             }`}
                           >
                             <span
@@ -414,7 +471,7 @@ export function ListadoDetailModal({
                             >
                               {formatTimestamp(frente.fechaSeparado)}
                             </span>
-                            {frente.separadoPor && (
+                            {frente.separadoPor && !isTimestampHistorico(frente.fechaSeparado) && (
                               <span
                                 className={`text-[9px] truncate block mt-0.5 ${
                                   frente.estado === 'SEPARADO'
@@ -449,7 +506,9 @@ export function ListadoDetailModal({
                         {frente.fechaEntregado ? (
                           <div
                             title={`${formatTimestamp(frente.fechaEntregado)}${
-                              frente.entregadoPor ? ` - ${frente.entregadoPor.nombre || frente.entregadoPor.usuario}` : ''
+                              frente.entregadoPor && !isTimestampHistorico(frente.fechaEntregado)
+                                ? ` - ${frente.entregadoPor.nombre || frente.entregadoPor.usuario}`
+                                : ''
                             }`}
                           >
                             <span
@@ -461,7 +520,7 @@ export function ListadoDetailModal({
                             >
                               {formatTimestamp(frente.fechaEntregado)}
                             </span>
-                            {frente.entregadoPor && (
+                            {frente.entregadoPor && !isTimestampHistorico(frente.fechaEntregado) && (
                               <span
                                 className={`text-[9px] truncate block mt-0.5 ${
                                   frente.estado === 'ENTREGADO'
@@ -496,7 +555,9 @@ export function ListadoDetailModal({
                         {frente.fechaDescontado ? (
                           <div
                             title={`${formatTimestamp(frente.fechaDescontado)}${
-                              frente.descontadoPor ? ` - ${frente.descontadoPor.nombre || frente.descontadoPor.usuario}` : ''
+                              frente.descontadoPor && !isTimestampHistorico(frente.fechaDescontado)
+                                ? ` - ${frente.descontadoPor.nombre || frente.descontadoPor.usuario}`
+                                : ''
                             }`}
                           >
                             <span
@@ -508,7 +569,7 @@ export function ListadoDetailModal({
                             >
                               {formatTimestamp(frente.fechaDescontado)}
                             </span>
-                            {frente.descontadoPor && (
+                            {frente.descontadoPor && !isTimestampHistorico(frente.fechaDescontado) && (
                               <span
                                 className={`text-[9px] truncate block mt-0.5 ${
                                   frente.estado === 'DESCONTADO'

@@ -15,6 +15,17 @@ export const PERMISOS = {
   LISTADO_CANCELAR: 'listado:cancelar',
   LISTADO_DESCONTAR: 'listado:descontar',
 
+  // ── Vales de material ─────────────────────────────────────────────────
+  VALE_VER: 'vale:ver',
+  VALE_CREAR: 'vale:crear',
+  VALE_EDITAR: 'vale:editar',
+  VALE_SEPARAR: 'vale:separar',
+  VALE_ENTREGAR: 'vale:entregar',
+  VALE_CANCELAR: 'vale:cancelar',
+  VALE_DESCONTAR: 'vale:descontar',
+  VALE_RETROCEDER: 'vale:retroceder',
+  VALE_RETROCEDER_DESCUENTO: 'vale:retroceder_descuento',
+
   // ── Usuarios ──────────────────────────────────────────────────────────
   USUARIO_VER: 'usuario:ver',
   USUARIO_CREAR: 'usuario:crear',

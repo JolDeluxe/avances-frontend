@@ -93,6 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const fullUser = response.data.usuario as UsuarioAuth;
           persistUser(fullUser);
         }
+        window.dispatchEvent(
+          new CustomEvent('auth:token-refreshed', {
+            detail: { token: response.data.accessToken, user: response.data.usuario },
+          }),
+        );
         return true;
       }
       return false;
@@ -138,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshSession]);
 
-  // Escuchar eventos globales del cliente HTTP
+  // Escuchar eventos globales del cliente HTTP y streams SSE
   useEffect(() => {
     const handleSessionExpired = () => {
       authState.setAccessToken(null);
@@ -152,14 +157,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const handlePermissionsStale = () => {
+      void (async () => {
+        const refreshed = await refreshSession();
+        if (!refreshed) {
+          authState.setAccessToken(null);
+          persistUser(null);
+        }
+      })();
+    };
+
     window.addEventListener('auth:session-expired', handleSessionExpired);
     window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+    window.addEventListener('auth:permissions-stale', handlePermissionsStale);
 
     return () => {
       window.removeEventListener('auth:session-expired', handleSessionExpired);
       window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+      window.removeEventListener('auth:permissions-stale', handlePermissionsStale);
     };
-  }, [persistUser]);
+  }, [persistUser, refreshSession]);
 
   return (
     <AuthContext.Provider

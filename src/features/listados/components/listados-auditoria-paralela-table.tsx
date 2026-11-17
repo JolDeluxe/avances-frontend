@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/ui/icon';
 import { Pagination } from '@/components/ui/pagination';
+import { Skeleton } from '@/components/ui/skeleton';
 import type {
   ListadoItem,
   EstadoFrenteMaterial,
@@ -393,9 +394,60 @@ export function ListadosAuditoriaParalelaTable({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-app-surface rounded-xl border border-border">
-        <div className="w-8 h-8 border-3 border-brand-accent border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-sm text-text-secondary font-medium">Cargando tablero de auditoría...</span>
+      <div className="w-full space-y-4">
+        {/* Barra superior skeleton */}
+        <div className="py-2 px-3 bg-app-surface/90 border border-border/80 rounded-lg flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-32 hidden sm:block" />
+            <Skeleton className="h-4 w-36 hidden md:block" />
+            <Skeleton className="h-4 w-36 hidden lg:block" />
+          </div>
+          <Skeleton className="h-4 w-20" />
+        </div>
+
+        {/* Tablero paralelo skeleton */}
+        <div className="bg-app-surface border border-border rounded-xl shadow-2xs overflow-hidden w-full">
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+            {/* Lado Directos */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-center pb-2 border-b border-border">
+                <Skeleton className="h-6 w-28" />
+              </div>
+              <div className="space-y-2.5 pt-1">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={`sk-dir-${i}`} className="flex items-center justify-between gap-3 py-2 px-2 border-b border-border/40">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                    <div className="flex items-center gap-1">
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Lado Indirectos */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-center pb-2 border-b border-border">
+                <Skeleton className="h-6 w-32" />
+              </div>
+              <div className="space-y-2.5 pt-1">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={`sk-ind-${i}`} className="flex items-center justify-between gap-3 py-2 px-2 border-b border-border/40">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                    <div className="flex items-center gap-1">
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

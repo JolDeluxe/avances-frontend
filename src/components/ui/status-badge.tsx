@@ -2,12 +2,14 @@ import { type ReactNode } from 'react';
 import {
   ESTADO_LISTADO_CONFIG,
   ESTADO_FRENTE_CONFIG,
+  ESTADO_VALE_CONFIG,
   type StatusVisualConfig,
 } from '@/config/status-config';
 import type {
   EstadoListado,
   EstadoFrenteMaterial,
 } from '@/features/listados/types/listados.types';
+import type { EstadoVale } from '@/features/vales/types/vales.types';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils/cn';
 
@@ -16,17 +18,20 @@ export interface StatusBadgeProps {
   estadoListado?: EstadoListado;
   /** Estado de frente de material */
   estadoFrente?: EstadoFrenteMaterial;
+  /** Estado de vale de material */
+  estadoVale?: EstadoVale;
   className?: string;
   showIcon?: boolean;
 }
 
 /**
- * Componente unificado para badges de estado (Listado y Frente).
+ * Componente unificado para badges de estado (Listado, Frente y Vale).
  * Consume la configuración centralizada de src/config/status-config.ts.
  */
 export function StatusBadge({
   estadoListado,
   estadoFrente,
+  estadoVale,
   className,
   showIcon = true,
 }: StatusBadgeProps): ReactNode {
@@ -36,10 +41,12 @@ export function StatusBadge({
     config = ESTADO_LISTADO_CONFIG[estadoListado];
   } else if (estadoFrente) {
     config = ESTADO_FRENTE_CONFIG[estadoFrente];
+  } else if (estadoVale) {
+    config = ESTADO_VALE_CONFIG[estadoVale];
   }
 
   const resolved = config ?? {
-    label: estadoListado ?? estadoFrente ?? 'Desconocido',
+    label: estadoListado ?? estadoFrente ?? estadoVale ?? 'Desconocido',
     className: 'bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20',
     dot: 'bg-slate-500',
   };
@@ -91,4 +98,17 @@ export function FrenteStatusBadge({
   className?: string;
 }): ReactNode {
   return <StatusBadge estadoFrente={estado} className={className} />;
+}
+
+/**
+ * Badge específico para estados operativos de Vale de Material.
+ */
+export function ValeStatusBadge({
+  estado,
+  className,
+}: {
+  estado: EstadoVale;
+  className?: string;
+}): ReactNode {
+  return <StatusBadge estadoVale={estado} className={className} />;
 }

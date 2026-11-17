@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AuthProvider } from './auth-provider';
 import { ListadosStreamProvider } from '@/features/listados/context/listados-stream-context';
+import { ValesStreamProvider } from '@/features/vales/context/vales-stream-context';
 
 /**
  * Ensamble jerárquico de todos los proveedores de contexto globales (SKILL.md §8).
@@ -10,7 +11,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <ListadosStreamProvider>
-        {children}
+        <ValesStreamProvider>
+          {children}
+        </ValesStreamProvider>
       </ListadosStreamProvider>
     </AuthProvider>
   );
