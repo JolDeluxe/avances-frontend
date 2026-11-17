@@ -1,117 +1,123 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { cn } from '@/lib/utils/cn';
 import { ROUTES } from '@/app/router/route-paths';
+import { cn } from '@/lib/utils/cn';
 import { usePermissions } from '@/shared/hooks/use-permissions';
-import type { PermisoCodigo } from '@/config/permissions';
 
-interface SubModuleTab {
+interface TabItem {
+  id: string;
   label: string;
-  route: string;
-  requiredPermissions: PermisoCodigo[];
+  to: string;
+  allowedRoles?: string[];
+  isSeparated?: boolean;
 }
 
-/**
- * Pestañas operativas principales del módulo de Vales (a la izquierda).
- */
-const MAIN_TABS: SubModuleTab[] = [
-  {
+const ALL_TABS: Record<string, TabItem> = {
+  almacen: {
+    id: 'almacen',
     label: 'Almacén',
-    route: ROUTES.VALES_ALMACEN,
-    requiredPermissions: ['vale:separar', 'vale:entregar'],
+    to: ROUTES.VALES_ALMACEN,
   },
-  {
-    label: 'Agregar +',
-    route: ROUTES.VALES_ADMINISTRACION,
-    requiredPermissions: ['vale:crear', 'vale:editar'],
-  },
-  {
-    label: 'Auditoría',
-    route: ROUTES.VALES_AUDITORIA,
-    requiredPermissions: ['vale:descontar'],
-  },
-  {
+  pendientes: {
+    id: 'pendientes',
     label: 'Pendientes',
-    route: ROUTES.VALES_PENDIENTES,
-    requiredPermissions: ['vale:ver'],
+    to: ROUTES.VALES_PENDIENTES,
   },
-];
-
-/**
- * Pestaña de consulta histórica (ubicada en el extremo derecho).
- */
-const HISTORIAL_TAB: SubModuleTab = {
-  label: 'Historial',
-  route: ROUTES.VALES_HISTORIAL,
-  requiredPermissions: ['vale:ver'],
+  administracion: {
+    id: 'administracion',
+    label: 'Agregar +',
+    to: ROUTES.VALES_ADMINISTRACION,
+  },
+  auditoria: {
+    id: 'auditoria',
+    label: 'Auditoría',
+    to: ROUTES.VALES_AUDITORIA,
+  },
+  historial: {
+    id: 'historial',
+    label: 'Historial',
+    to: ROUTES.VALES_HISTORIAL,
+    isSeparated: true,
+  },
 };
 
 /**
- * Barra de navegación interna entre los submódulos de Vales.
- * Solo muestra las pestañas para las que el usuario tiene al menos uno de los permisos requeridos.
- * Si el usuario solo tiene acceso a una pestaña en total, no se muestra la barra.
+ * Orden y visibilidad de tabs según el rol (idéntico a ListadosNav):
+ * - ALMACENISTA: ALMACEN | PENDIENTES
+ * - REGISTRADOR: AGREGAR + | PENDIENTES | (Historial separado)
+ * - AUDITOR: AUDITORIA | PENDIENTES | (Historial separado)
+ * - ADMIN: AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
+ * - SUPER_ADMIN: ALMACEN | AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
+ * - SUPERVISOR: PENDIENTES | (Historial separado)
  */
-export function ValesNav(): ReactNode {
-  const { hasAnyPermission } = usePermissions();
+const ROLE_TABS_CONFIG: Record<string, string[]> = {
+  ALMACENISTA: ['almacen', 'pendientes'],
+  REGISTRADOR: ['administracion', 'pendientes', 'historial'],
+  AUDITOR: ['auditoria', 'pendientes', 'historial'],
+  ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
+  SUPER_ADMIN: ['almacen', 'administracion', 'auditoria', 'pendientes', 'historial'],
+  SUPERVISOR: ['pendientes', 'historial'],
+};
 
-  const visibleMainTabs = MAIN_TABS.filter((tab) =>
-    hasAnyPermission(tab.requiredPermissions),
-  );
-  const isHistorialVisible = hasAnyPermission(HISTORIAL_TAB.requiredPermissions);
+/**
+ * Barra de navegación interna del módulo Vales.
+ * Usa NavLink para que el tab activo se marque automáticamente.
+ * Estilos, tipografía, paddings y comportamiento exactamente idénticos a ListadosNav.
+ */
+export function ValesNav({ className }: { className?: string }): ReactNode {
+  const { rol, isSuperAdmin } = usePermissions();
 
-  const totalVisible = visibleMainTabs.length + (isHistorialVisible ? 1 : 0);
+  const roleKey = isSuperAdmin ? 'SUPER_ADMIN' : (rol || '');
+  const tabIds = ROLE_TABS_CONFIG[roleKey] || ['pendientes', 'historial'];
 
-  if (totalVisible <= 1) {
+  const visibleTabs: TabItem[] = tabIds
+    .map((id) => ALL_TABS[id])
+    .filter((t): t is TabItem => Boolean(t));
+
+  // Si solo hay un tab visible, se oculta la barra redundante
+  if (visibleTabs.length <= 1) {
     return null;
   }
 
-  return (
-    <div className="border-b border-border">
-      <nav
-        className="flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar"
-        aria-label="Submódulos de Vales"
-      >
-        {/* Pestañas operativas a la izquierda */}
-        <div className="flex items-center gap-0.5">
-          {visibleMainTabs.map((tab) => (
-            <NavLink
-              key={tab.route}
-              to={tab.route}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex items-center gap-2 px-4 py-2 text-xs transition-colors whitespace-nowrap select-none',
-                  'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-t-full after:transition-all',
-                  isActive
-                    ? 'font-bold text-marca-primario after:bg-marca-secundario'
-                    : 'font-medium text-text-muted hover:text-text-primary after:bg-transparent hover:after:bg-border-strong',
-                )
-              }
-            >
-              <span>{tab.label}</span>
-            </NavLink>
-          ))}
-        </div>
+  const mainTabs = visibleTabs.filter((t) => !t.isSeparated);
+  const separatedTabs = visibleTabs.filter((t) => t.isSeparated);
 
-        {/* Pestaña de Historial separada a la derecha */}
-        {isHistorialVisible && (
-          <div className="flex items-center shrink-0">
-            <NavLink
-              to={HISTORIAL_TAB.route}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex items-center gap-2 px-4 py-2 text-xs transition-colors whitespace-nowrap select-none',
-                  'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-t-full after:transition-all',
-                  isActive
-                    ? 'font-bold text-marca-primario after:bg-marca-secundario'
-                    : 'font-medium text-text-muted hover:text-text-primary after:bg-transparent hover:after:bg-border-strong',
-                )
-              }
-            >
-              <span>{HISTORIAL_TAB.label}</span>
-            </NavLink>
-          </div>
-        )}
-      </nav>
-    </div>
+  const renderTab = (tab: TabItem) => (
+    <NavLink
+      key={tab.id}
+      to={tab.to}
+      end
+      className={({ isActive }) =>
+        cn(
+          'relative px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-colors outline-none tracking-wide',
+          'focus-visible:ring-2 focus-visible:ring-border-focus rounded-t-md',
+          isActive
+            ? 'text-text-primary after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-0.5 after:bg-marca-secundario after:rounded-full'
+            : 'text-text-muted hover:text-text-secondary',
+        )
+      }
+    >
+      {tab.label}
+    </NavLink>
+  );
+
+  return (
+    <nav
+      role="tablist"
+      aria-label="Secciones de Vales"
+      className={cn('flex items-center justify-between border-b border-border', className)}
+    >
+      {/* Grupo principal: Administración, Auditoría, Pendientes */}
+      <div className="flex gap-1 items-center">
+        {mainTabs.map(renderTab)}
+      </div>
+
+      {/* Grupo a la derecha: Historial */}
+      {separatedTabs.length > 0 && (
+        <div className="flex gap-1 items-center ml-auto pl-6 border-l border-border/50">
+          {separatedTabs.map(renderTab)}
+        </div>
+      )}
+    </nav>
   );
 }

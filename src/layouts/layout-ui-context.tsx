@@ -8,6 +8,9 @@ export interface LayoutUIState {
   mobileMenuOpen: boolean;
   toggleMobileMenu: () => void;
   closeMobileMenu: () => void;
+  /** Modo pantalla completa para proyección en planta (oculta layout) */
+  fullscreenMode: boolean;
+  setFullscreenMode: (value: boolean) => void;
 }
 
 // oxlint-disable-next-line react/only-export-components
@@ -23,6 +26,7 @@ export function LayoutUIProvider({ children }: { children: ReactNode }) {
     }
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
 
   const toggleSidebar = () => {
     setSidebarExpanded((prev: boolean) => {
@@ -44,6 +48,8 @@ export function LayoutUIProvider({ children }: { children: ReactNode }) {
         mobileMenuOpen,
         toggleMobileMenu: () => setMobileMenuOpen((v) => !v),
         closeMobileMenu: () => setMobileMenuOpen(false),
+        fullscreenMode,
+        setFullscreenMode,
       }}
     >
       {children}

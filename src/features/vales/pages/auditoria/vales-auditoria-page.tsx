@@ -30,13 +30,13 @@ function formatFecha(fechaStr: string): string {
  * - Cuando el auditor confirma el descuento (`DESCONTADO`), la fila anima y desaparece de la vista.
  */
 export function ValesAuditoriaPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission } = usePermissions();
+  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
 
-  const canVer = hasAnyPermission(['vale:ver', 'vale:descontar']);
-  const canDescontar = hasPermission('vale:descontar');
-  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
-  const canEditar = hasPermission('vale:editar');
-  const canCancelar = hasPermission('vale:cancelar');
+  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:descontar']);
+  const canDescontar = isSuperAdmin || isAdmin || hasPermission('vale:descontar');
+  const canRetroceder = isSuperAdmin || isAdmin || hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
+  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(

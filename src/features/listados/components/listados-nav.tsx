@@ -45,14 +45,15 @@ const ALL_TABS: Record<string, TabItem> = {
  * - ALMACENISTA: ALMACEN | PENDIENTES
  * - REGISTRADOR: AGREGAR + | PENDIENTES | (Historial separado)
  * - AUDITOR: AUDITORIA | PENDIENTES | (Historial separado)
- * - ADMIN / SUPER_ADMIN: AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
+ * - ADMIN: AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
+ * - SUPER_ADMIN: ALMACEN | AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
  */
 const ROLE_TABS_CONFIG: Record<string, string[]> = {
   ALMACENISTA: ['almacen', 'pendientes'],
   REGISTRADOR: ['administracion', 'pendientes', 'historial'],
   AUDITOR: ['auditoria', 'pendientes', 'historial'],
   ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
-  SUPER_ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
+  SUPER_ADMIN: ['almacen', 'administracion', 'auditoria', 'pendientes', 'historial'],
   SUPERVISOR: ['pendientes', 'historial'],
 };
 

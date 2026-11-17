@@ -49,9 +49,9 @@ const MonitorPendientesPage = lazy(() =>
     default: m.MonitorPendientesPage,
   })),
 );
-const ProyeccionPendientesPage = lazy(() =>
-  import('@/features/listados/pages/monitor/proyeccion-pendientes-page').then((m) => ({
-    default: m.ProyeccionPendientesPage,
+const ProyeccionPage = lazy(() =>
+  import('@/features/proyeccion').then((m) => ({
+    default: m.ProyeccionPage,
   })),
 );
 
@@ -88,11 +88,7 @@ const MonitorValesPendientesPage = lazy(() =>
     default: m.MonitorValesPendientesPage,
   })),
 );
-const ProyeccionValesPendientesPage = lazy(() =>
-  import('@/features/vales/pages/monitor/proyeccion-pendientes-page').then((m) => ({
-    default: m.ProyeccionValesPendientesPage,
-  })),
-);
+
 
 /** Fallback visual ligero durante la carga asíncrona de chunks de ruta */
 function RouteLoadingFallback() {
@@ -247,14 +243,15 @@ export const routes: RouteObject[] = [
             ),
           },
           {
-            // Módulo PROYECCIÓN: Pantalla de LISTADOS PENDIENTES
+            // Módulo Proyección Centralizado (Pantallas de planta y almacén)
+            // Se integra en el layout habitual y se expande al 100% en Pantalla Completa
             path: ROUTES.PROYECCION,
             element: (
               <RequirePermission
-                permission={PERMISOS.LISTADO_VER}
+                anyPermission={[PERMISOS.LISTADO_VER, PERMISOS.VALE_VER]}
                 fallbackRoute={ROUTES.LOGIN}
               >
-                {withSuspense(<ProyeccionPendientesPage />)}
+                {withSuspense(<ProyeccionPage />)}
               </RequirePermission>
             ),
           },
@@ -262,13 +259,25 @@ export const routes: RouteObject[] = [
             path: ROUTES.PROYECCION_PENDIENTES,
             element: (
               <RequirePermission
-                permission={PERMISOS.LISTADO_VER}
+                anyPermission={[PERMISOS.LISTADO_VER, PERMISOS.VALE_VER]}
                 fallbackRoute={ROUTES.LOGIN}
               >
-                {withSuspense(<ProyeccionPendientesPage />)}
+                {withSuspense(<ProyeccionPage initialVista="listados" />)}
               </RequirePermission>
             ),
           },
+          {
+            path: ROUTES.PROYECCION_VALES,
+            element: (
+              <RequirePermission
+                anyPermission={[PERMISOS.LISTADO_VER, PERMISOS.VALE_VER]}
+                fallbackRoute={ROUTES.LOGIN}
+              >
+                {withSuspense(<ProyeccionPage initialVista="vales" />)}
+              </RequirePermission>
+            ),
+          },
+
           {
             // Módulo Listados — layout con navegación interna
             path: ROUTES.LISTADOS,
@@ -352,18 +361,7 @@ export const routes: RouteObject[] = [
               </RequirePermission>
             ),
           },
-          {
-            // Proyección de Vales Pendientes
-            path: ROUTES.PROYECCION_VALES,
-            element: (
-              <RequirePermission
-                permission={PERMISOS.VALE_VER}
-                fallbackRoute={ROUTES.LOGIN}
-              >
-                {withSuspense(<ProyeccionValesPendientesPage />)}
-              </RequirePermission>
-            ),
-          },
+
           {
             // Módulo Vales — layout con navegación interna y guards por permisos efectivos
             path: ROUTES.VALES,

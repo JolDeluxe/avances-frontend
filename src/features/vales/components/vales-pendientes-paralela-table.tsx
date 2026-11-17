@@ -89,12 +89,12 @@ function IndicadorProgresoVale({ estado }: { estado?: EstadoVale }): ReactNode {
   if (estado === 'DESCONTADO') {
     return (
       <span
-        className="inline-flex items-center justify-center gap-1 select-none"
+        className="inline-flex items-center justify-center gap-1.5 select-none"
         title="Separado + Entregado + Descontado en Sistema"
       >
-        <Icon name="circle" fill size="11px" className="text-amber-500 shrink-0" />
-        <Icon name="check" size="13px" weight={700} className="text-emerald-600 shrink-0" />
-        <Icon name="done_all" size="14px" weight={700} className="text-purple-600 shrink-0" />
+        <Icon name="circle" fill size="13px" className="text-amber-500 shrink-0" />
+        <Icon name="check" size="15px" weight={700} className="text-emerald-600 shrink-0" />
+        <Icon name="done_all" size="17px" weight={700} className="text-purple-600 shrink-0" />
       </span>
     );
   }
@@ -102,11 +102,11 @@ function IndicadorProgresoVale({ estado }: { estado?: EstadoVale }): ReactNode {
   if (estado === 'ENTREGADO') {
     return (
       <span
-        className="inline-flex items-center justify-center gap-1 select-none"
+        className="inline-flex items-center justify-center gap-1.5 select-none"
         title="Separado en Almacén + Entregado a Producción"
       >
-        <Icon name="circle" fill size="11px" className="text-amber-500 shrink-0" />
-        <Icon name="check" size="13px" weight={700} className="text-emerald-600 shrink-0" />
+        <Icon name="circle" fill size="13px" className="text-amber-500 shrink-0" />
+        <Icon name="check" size="15px" weight={700} className="text-emerald-600 shrink-0" />
       </span>
     );
   }
@@ -117,7 +117,7 @@ function IndicadorProgresoVale({ estado }: { estado?: EstadoVale }): ReactNode {
         className="inline-flex items-center justify-center select-none"
         title="Separado en Almacén"
       >
-        <Icon name="circle" fill size="12px" className="text-amber-500 shrink-0" />
+        <Icon name="circle" fill size="14px" className="text-amber-500 shrink-0" />
       </span>
     );
   }
@@ -217,12 +217,11 @@ function MenuAccionesFila({
 
   const canRetroceder =
     Boolean(acciones.canRetroceder && acciones.onRetroceder) &&
-    (row.estado === 'SEPARADO' || row.estado === 'ENTREGADO' || row.estado === 'DESCONTADO');
+    (row.estado === 'SEPARADO' || row.estado === 'ENTREGADO');
   const canEditar =
-    Boolean(acciones.canEditar && acciones.onEditar) && row.estado === 'PENDIENTE';
+    Boolean(acciones.canEditar && acciones.onEditar) && !isTerminal;
   const canCancelar =
-    Boolean(acciones.canCancelar && acciones.onCancelar) &&
-    (row.estado === 'PENDIENTE' || row.estado === 'SEPARADO');
+    Boolean(acciones.canCancelar && acciones.onCancelar) && !isTerminal;
   const canSeparar =
     Boolean(acciones.canSeparar && acciones.onSeparar) && row.estado === 'PENDIENTE';
   const canEntregar =
@@ -829,23 +828,23 @@ export function ValesPendientesParalelaTable({
   return (
     <div className="w-full space-y-4">
       {/* ─── Barra Superior de Leyenda de Progreso (Idéntica a Listados) ────────── */}
-      <div className="py-1.5 px-3 bg-app-surface/90 border border-border/80 rounded-lg shadow-2xs flex items-center justify-between text-[11px] text-text-muted gap-3 flex-wrap">
+      <div className="py-1.5 px-3 bg-app-surface/90 border border-border/80 rounded-lg shadow-2xs flex items-center justify-between text-xs text-text-muted gap-3 flex-wrap">
         <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
-          <span className="flex items-center gap-1 font-medium">
-            <Icon name="more_horiz" size="14px" className="text-text-muted/70 shrink-0" />
-            <span className="text-text-secondary">Materiales Pendientes</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Icon name="more_horiz" size="18px" className="text-text-muted/70 shrink-0" />
+            <span className="text-text-secondary font-semibold">Materiales Pendientes</span>
           </span>
-          <span className="flex items-center gap-1 font-medium">
-            <Icon name="circle" fill size="10px" className="text-amber-500 shrink-0" />
-            <span className="text-text-secondary">Separado en Almacén</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Icon name="circle" fill size="13px" className="text-amber-500 shrink-0" />
+            <span className="text-text-secondary font-semibold">Separado en Almacén</span>
           </span>
-          <span className="flex items-center gap-1 font-medium">
-            <Icon name="check" size="12px" weight={700} className="text-emerald-600 shrink-0" />
-            <span className="text-text-secondary">Entregado a Producción</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Icon name="check" size="15px" weight={700} className="text-emerald-600 shrink-0" />
+            <span className="text-text-secondary font-semibold">Entregado a Producción</span>
           </span>
-          <span className="flex items-center gap-1 font-medium">
-            <Icon name="done_all" size="13px" weight={700} className="text-purple-600 shrink-0" />
-            <span className="text-text-secondary">Descontado en Sistema</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Icon name="done_all" size="17px" weight={700} className="text-purple-600 shrink-0" />
+            <span className="text-text-secondary font-semibold">Descontado en Sistema</span>
           </span>
         </div>
         {headerRight && <div className="flex items-center gap-2 shrink-0">{headerRight}</div>}

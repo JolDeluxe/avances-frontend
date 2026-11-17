@@ -34,12 +34,12 @@ function formatFecha(fechaStr: string): string {
 export function ValesAdministracionPage(): ReactNode {
   const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
 
-  const canVer = hasAnyPermission(['vale:ver', 'vale:crear', 'vale:editar']);
-  const canCrear = hasPermission('vale:crear');
-  const canEditar = hasPermission('vale:editar');
-  const canCancelar = hasPermission('vale:cancelar');
+  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:crear', 'vale:editar']);
+  const canCrear = isSuperAdmin || isAdmin || hasPermission('vale:crear');
+  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
+  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
   const canRetroceder =
-    (isSuperAdmin || isAdmin) &&
+    (isSuperAdmin || isAdmin) ||
     hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
 
   // Desactivación / Atenuación visual de bloques por alcance asignado

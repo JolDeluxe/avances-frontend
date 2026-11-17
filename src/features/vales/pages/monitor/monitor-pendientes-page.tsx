@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { useVales } from '@/features/vales/hooks/use-vales';
@@ -65,30 +65,104 @@ export function MonitorValesPendientesPage(): ReactNode {
     setIsRefreshing(false);
   };
 
-  // ─── Modo Pantalla Completa (Full Screen API) ──────────────────────────────
+  // ─── Modo Pantalla Completa & Detección de Inactividad de 1 Minuto ───────────
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const INACTIVITY_MS = 60 * 1000;
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const isNative = Boolean(document.fullscreenElement);
+      if (!isNative && isFullscreen) {
+        setIsFullscreen(false);
+      } else if (isNative) {
+        setIsFullscreen(true);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        if (document.fullscreenElement) {
+          void document.exitFullscreen().catch(() => {});
+        }
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  const activarFullscreen = useCallback(async () => {
+    if (!document.fullscreenElement && containerRef.current) {
+      try {
+        await containerRef.current.requestFullscreen();
+      } catch {
+        // Bloqueo de API silencioso
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    const resetTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      inactivityTimerRef.current = setTimeout(() => {
+        void activarFullscreen();
+      }, INACTIVITY_MS);
+    };
+
+    const handleUserActivity = (e: Event) => {
+      if (e.type === 'mousemove') {
+        const mouseEvt = e as MouseEvent;
+        const dx = Math.abs(mouseEvt.clientX - lastMousePosRef.current.x);
+        const dy = Math.abs(mouseEvt.clientY - lastMousePosRef.current.y);
+        if (dx < 6 && dy < 6) return;
+        lastMousePosRef.current = { x: mouseEvt.clientX, y: mouseEvt.clientY };
+      }
+      resetTimer();
+    };
+
+    const userActivityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    userActivityEvents.forEach((evt) =>
+      window.addEventListener(evt, handleUserActivity, { passive: true }),
+    );
+
+    resetTimer();
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      userActivityEvents.forEach((evt) =>
+        window.removeEventListener(evt, handleUserActivity),
+      );
+    };
+  }, [activarFullscreen]);
 
   const toggleFullscreen = async () => {
     try {
-      if (!document.fullscreenElement) {
-        if (containerRef.current) {
+      if (!isFullscreen) {
+        setIsFullscreen(true);
+        if (containerRef.current && !document.fullscreenElement) {
           await containerRef.current.requestFullscreen();
         }
       } else {
-        await document.exitFullscreen();
+        setIsFullscreen(false);
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
       }
     } catch {
-      // Si la API del navegador no está disponible o es bloqueada
+      // Bloqueo o rechazo de API por navegador
     }
   };
 
@@ -139,15 +213,9 @@ export function MonitorValesPendientesPage(): ReactNode {
       {/* ─── Encabezado del Monitor / Tablero en Vivo ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-black font-sans text-text-primary uppercase tracking-tight">
-              Vales Pendientes
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              EN VIVO
-            </span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black font-sans text-text-primary uppercase tracking-tight">
+            Vales Pendientes
+          </h1>
           <p className="text-xs text-text-secondary font-lectura mt-0.5">
             Monitor de producción y almacén en tiempo real ({itemsPendientes.length} vales por
             completar).

@@ -35,13 +35,13 @@ function formatFecha(fechaStr: string): string {
 export function ValesPendientesPage(): ReactNode {
   const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
 
-  const canVer = hasPermission('vale:ver');
-  const canSeparar = hasPermission('vale:separar');
-  const canEntregar = hasPermission('vale:entregar');
-  const canDescontar = hasPermission('vale:descontar');
-  const canEditar = hasPermission('vale:editar');
-  const canCancelar = hasPermission('vale:cancelar');
-  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canVer = isSuperAdmin || isAdmin || hasPermission('vale:ver');
+  const canSeparar = isSuperAdmin || isAdmin || hasPermission('vale:separar');
+  const canEntregar = isSuperAdmin || isAdmin || hasPermission('vale:entregar');
+  const canDescontar = isSuperAdmin || isAdmin || hasPermission('vale:descontar');
+  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
+  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
+  const canRetroceder = isSuperAdmin || isAdmin || hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
 
   // Un usuario de solo lectura (ej. GERENCIA sin permisos de operación) solo consulta el tablero
   const canInteract =

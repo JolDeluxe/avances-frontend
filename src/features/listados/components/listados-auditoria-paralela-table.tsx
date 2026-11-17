@@ -136,8 +136,8 @@ function MenuAccionesAuditoria({
   const updateMenuPosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const menuWidth = 208;
-      const menuHeight = 140;
+      const menuWidth = 224; // w-56 (224px) idéntico a listados y vales
+      const menuHeight = 220;
 
       let left = rect.right - menuWidth;
       if (left < 10) left = 10;
@@ -237,7 +237,7 @@ function MenuAccionesAuditoria({
               top: `${menuPos.top}px`,
               left: `${menuPos.left}px`,
             }}
-            className="w-52 rounded-xl bg-app-surface border border-border shadow-xl py-1.5 z-[9999] text-xs"
+            className="w-56 rounded-xl bg-app-surface border border-border shadow-xl p-1.5 z-[9999] text-xs space-y-0.5"
           >
             <button
               type="button"
@@ -251,6 +251,21 @@ function MenuAccionesAuditoria({
               <span>Ver detalles</span>
             </button>
 
+            {/* Editar listado */}
+            {acciones.canEditar && acciones.onEditar && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  acciones.onEditar!(row);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-text-primary hover:bg-cuadra-arena/40 text-left transition-colors cursor-pointer"
+              >
+                <Icon name="edit" size="xs" className="text-text-muted" />
+                <span>Editar listado</span>
+              </button>
+            )}
+
             {/* Descontar en Sistema */}
             {puedeDescontarEste && acciones.onDescontarFrente && (
               <button
@@ -259,7 +274,7 @@ function MenuAccionesAuditoria({
                   setIsOpen(false);
                   acciones.onDescontarFrente!(row, tipoFrenteColumna);
                 }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-purple-700 font-semibold hover:bg-purple-500/10 text-left transition-colors cursor-pointer text-[13px] rounded-md border-t border-border/50"
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-purple-700 font-semibold hover:bg-purple-500/10 text-left transition-colors cursor-pointer text-[13px] rounded-md"
               >
                 <Icon name="done_all" size="sm" className="text-purple-600" />
                 <span>Descontar en Sistema</span>
@@ -278,20 +293,6 @@ function MenuAccionesAuditoria({
               >
                 <Icon name="undo" size="xs" />
                 <span>Retroceder</span>
-              </button>
-            )}
-            {/* Editar listado */}
-            {acciones.canEditar && acciones.onEditar && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  acciones.onEditar!(row);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-text-primary hover:bg-cuadra-arena/40 text-left transition-colors cursor-pointer border-t border-border/50"
-              >
-                <Icon name="edit" size="xs" className="text-text-muted" />
-                <span>Editar listado</span>
               </button>
             )}
 

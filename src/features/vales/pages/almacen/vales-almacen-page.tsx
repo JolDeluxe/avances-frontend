@@ -31,14 +31,14 @@ function formatFecha(fechaStr: string): string {
  * - Cuando es entregado a producción (`ENTREGADO`), sale de Almacén y pasa a Auditoría.
  */
 export function ValesAlmacenPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission } = usePermissions();
+  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
 
-  const canVer = hasAnyPermission(['vale:ver', 'vale:separar', 'vale:entregar']);
-  const canSeparar = hasPermission('vale:separar');
-  const canEntregar = hasPermission('vale:entregar');
-  const canEditar = hasPermission('vale:editar');
-  const canCancelar = hasPermission('vale:cancelar');
-  const canRetroceder = hasPermission('vale:retroceder');
+  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:separar', 'vale:entregar']);
+  const canSeparar = isSuperAdmin || isAdmin || hasPermission('vale:separar');
+  const canEntregar = isSuperAdmin || isAdmin || hasPermission('vale:entregar');
+  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
+  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
+  const canRetroceder = isSuperAdmin || isAdmin || hasPermission('vale:retroceder');
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
