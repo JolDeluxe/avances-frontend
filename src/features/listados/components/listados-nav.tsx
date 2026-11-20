@@ -59,7 +59,7 @@ export function ListadosNav({ className }: { className?: string }) {
   }
 
   const isAlmacenista = rol === 'ALMACENISTA';
-  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin);
+  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin || rol === 'VISUALIZADOR');
 
   // Orden canónico basado en permisos efectivos:
   // - Agregar +: Solo si tiene permiso de crear

@@ -82,8 +82,16 @@ export function LoginForm({
   // 3. REGISTRADOR
   // 4. ALMACENISTA
   // 5. SUPER_ADMIN (hasta el final)
+  // 6. VISUALIZADOR (incluso abajo de SUPER_ADMIN)
   const getRolPriority = (u: UsuarioLoginItem): number => {
     const codigoRol = u.rol?.codigo?.toUpperCase();
+    if (
+      codigoRol === 'VISUALIZADOR' ||
+      u.usuario.toLowerCase() === 'visualizador' ||
+      u.nombre.toLowerCase().includes('visualizador')
+    ) {
+      return 100; // Hasta abajo, incluso abajo de SUPER_ADMIN
+    }
     if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
       return 99; // Siempre al final
     }
@@ -103,6 +111,16 @@ export function LoginForm({
 
   const getOptionStyle = (u: UsuarioLoginItem): { className: string; style?: React.CSSProperties } => {
     const codigoRol = u.rol?.codigo?.toUpperCase();
+    if (
+      codigoRol === 'VISUALIZADOR' ||
+      u.usuario.toLowerCase() === 'visualizador' ||
+      u.nombre.toLowerCase().includes('visualizador')
+    ) {
+      return {
+        className: 'text-indigo-600 font-medium',
+        style: { color: '#4f46e5' },
+      };
+    }
     if (codigoRol === 'SUPER_ADMIN' || u.usuario === 'admin' || u.nombre.toLowerCase().includes('super')) {
       return {
         className: 'text-gray-400 font-normal',

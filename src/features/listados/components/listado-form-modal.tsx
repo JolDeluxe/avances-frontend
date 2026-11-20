@@ -199,11 +199,17 @@ export function ListadoFormModal({
 
     setCarrito((prev) => [...prev, nuevoItem]);
 
-    // Limpiar número y enfocar para el siguiente, pero mantener línea y fecha para captura ágil
-    setNumeroListado('');
+    // Re-iniciar datos del listado para el siguiente registro (conservando fechaRequerida)
+    resetFormularioPreservandoFecha();
     setTimeout(() => {
       numeroListadoInputRef.current?.focus();
     }, 50);
+  };
+
+  // Re-iniciar campos del formulario preservando la fecha requerida
+  const resetFormularioPreservandoFecha = () => {
+    setNumeroListado('');
+    setLineaProduccionId(0);
   };
 
   // Cargar elemento del carrito para editarlo
@@ -251,13 +257,13 @@ export function ListadoFormModal({
     );
 
     setEditingCartItemId(null);
-    setNumeroListado('');
+    resetFormularioPreservandoFecha();
   };
 
   // Cancelar edición de un elemento del carrito
   const handleCancelarEdicion = () => {
     setEditingCartItemId(null);
-    setNumeroListado('');
+    resetFormularioPreservandoFecha();
     setError(null);
   };
 
@@ -265,7 +271,7 @@ export function ListadoFormModal({
   const handleEliminarItem = (itemId: string) => {
     if (editingCartItemId === itemId) {
       setEditingCartItemId(null);
-      setNumeroListado('');
+      resetFormularioPreservandoFecha();
     }
     setCarrito((prev) => prev.filter((item) => item.id !== itemId));
   };
@@ -274,6 +280,7 @@ export function ListadoFormModal({
   const handleVaciarCarrito = () => {
     setCarrito([]);
     setEditingCartItemId(null);
+    resetFormularioPreservandoFecha();
     setError(null);
   };
 

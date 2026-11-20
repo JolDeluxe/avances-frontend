@@ -49,6 +49,10 @@ const ROL_CONFIG: Record<string, { label: string; badgeClass: string }> = {
     label: 'Registrador',
     badgeClass: 'bg-teal-500/10 text-teal-800 dark:text-teal-300 border-teal-500/25',
   },
+  VISUALIZADOR: {
+    label: 'Visualizador',
+    badgeClass: 'bg-indigo-500/10 text-indigo-800 dark:text-indigo-300 border-indigo-500/25',
+  },
 };
 
 export function UserRoleBadge({ rolCodigo }: { rolCodigo?: string }): ReactNode {
@@ -112,6 +116,10 @@ export function UserSegmentacionBadge({
       return ['Acceso Total'];
     }
 
+    if (code === 'VISUALIZADOR') {
+      return ['Solo Lectura'];
+    }
+
     if (code === 'REGISTRADOR') {
       return ['Captura y Registro'];
     }
@@ -166,6 +174,10 @@ export function UserValesBadge({
 
     if (code === 'REGISTRADOR') {
       return ['Registro de Vales'];
+    }
+
+    if (code === 'VISUALIZADOR') {
+      return ['Solo Lectura'];
     }
 
     if (code === 'ALMACENISTA') {

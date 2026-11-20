@@ -48,24 +48,6 @@ function getTodayDateString(): string {
 }
 
 /**
- * Infiere automáticamente el área operativa cuando se registra una línea nueva
- * o una línea sin área fija asignada, sin exponer selectores de área en el modal.
- */
-function inferirAreaPorNombreLinea(nombreLinea: string): AreaVale {
-  const upper = nombreLinea.trim().toUpperCase();
-  if (
-    upper.startsWith('ACC') ||
-    upper.startsWith('BIL') ||
-    upper.startsWith('BOL') ||
-    upper.startsWith('CHA') ||
-    upper.startsWith('CIN')
-  ) {
-    return 'ACCESORIOS';
-  }
-  return 'BOTA';
-}
-
-/**
  * Modal de Creación y Edición de Vale de Material.
  * Soporta modo Individual y modo "Varios a la vez" (Carrito de captura rápida).
  */
@@ -106,6 +88,7 @@ export function ValeFormModal({
   const [nuevaLinea, setNuevaLinea] = useState<string>('');
   const [isLineaOpen, setIsLineaOpen] = useState(false);
   const [lineaSearch, setLineaSearch] = useState('');
+  const [areaSeleccionada, setAreaSeleccionada] = useState<AreaVale | null>(null);
   const lineaSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Fecha y Hora de solicitud (hora discreta)
@@ -153,6 +136,7 @@ export function ValeFormModal({
       setSerieId(String(valeToEdit.serieId));
       setFolio(valeToEdit.folio);
       setDepartamentoValeId(String(valeToEdit.departamentoValeId));
+      setAreaSeleccionada(valeToEdit.area ?? null);
       setFechaSolicitud(valeToEdit.fechaSolicitud ? valeToEdit.fechaSolicitud.slice(0, 10) : '');
       const rawIso = valeToEdit.fechaSolicitud ?? '';
       const horaExtraida =
@@ -165,6 +149,7 @@ export function ValeFormModal({
       setSerieId(series.length === 1 ? String(series[0].id) : '');
       setFolio('');
       setDepartamentoValeId('');
+      setAreaSeleccionada(null);
       setFechaSolicitud(getTodayDateString());
       setTieneHoraSolicitud(false);
       setHoraSolicitud('');
@@ -258,12 +243,27 @@ export function ValeFormModal({
       return { valid: false, error: 'Ingresa una hora válida (HH:mm) o quita el campo de hora.' };
     }
 
-    // Resolver área automáticamente
-    const autoArea: AreaVale | undefined = modoNuevaLinea
-      ? inferirAreaPorNombreLinea(nuevaLinea)
-      : selectedLinea?.requiereSeleccionArea
-        ? valeToEdit?.area ?? inferirAreaPorNombreLinea(selectedLinea.nombre)
-        : selectedLinea?.areaFija ?? undefined;
+    // Determinar si el departamento requiere selección explícita de área
+    const requiereSeleccionArea = Boolean(
+      modoNuevaLinea ||
+        selectedLinea?.requiereSeleccionArea ||
+        (!selectedLinea?.areaFija && departamentoValeId)
+    );
+
+    let areaFinal: AreaVale | undefined;
+    if (requiereSeleccionArea) {
+      if (!areaSeleccionada) {
+        return {
+          valid: false,
+          error: modoNuevaLinea
+            ? 'Por favor selecciona el área (BOTA, ACCESORIOS u OTRO) para la nueva línea.'
+            : `El departamento "${selectedLinea?.nombre || 'seleccionado'}" requiere indicar si corresponde a BOTA, ACCESORIOS u OTRO.`,
+        };
+      }
+      areaFinal = areaSeleccionada;
+    } else {
+      areaFinal = selectedLinea?.areaFija ?? (valeToEdit?.area ? valeToEdit.area : undefined);
+    }
 
     const createPayload: CreateValeInput = {
       ...(modoNuevaSerie
@@ -273,7 +273,7 @@ export function ValeFormModal({
       ...(modoNuevaLinea
         ? { nuevoDepartamento: nuevaLinea.trim().toUpperCase() }
         : { departamentoValeId: Number(departamentoValeId) }),
-      ...(autoArea ? { area: autoArea } : {}),
+      ...(areaFinal ? { area: areaFinal } : {}),
       fechaSolicitud,
       tieneHoraSolicitud,
       ...(tieneHoraSolicitud && horaSolicitud.trim() ? { horaSolicitud: horaSolicitud.trim() } : {}),
@@ -284,7 +284,7 @@ export function ValeFormModal({
       payload: createPayload,
       serieLabel,
       lineaLabel,
-      areaLabel: autoArea,
+      areaLabel: areaFinal,
     };
   };
 
@@ -319,11 +319,27 @@ export function ValeFormModal({
 
     setCarrito((prev) => [...prev, nuevoItem]);
 
-    // Limpiar folio y enfocar para el siguiente vale, pero mantener serie, línea y fecha
-    setFolio('');
+    // Re-iniciar datos del vale para el siguiente registro (conservando fechaSolicitud)
+    resetFormularioPreservandoFecha();
     setTimeout(() => {
       folioInputRef.current?.focus();
     }, 50);
+  };
+
+  // Re-iniciar campos del formulario preservando la fecha de solicitud
+  const resetFormularioPreservandoFecha = () => {
+    setFolio('');
+    setSerieId(series.length === 1 ? String(series[0].id) : '');
+    setModoNuevaSerie(false);
+    setNuevaSerie('');
+    setDepartamentoValeId('');
+    setModoNuevaLinea(false);
+    setNuevaLinea('');
+    setIsLineaOpen(false);
+    setLineaSearch('');
+    setAreaSeleccionada(null);
+    setTieneHoraSolicitud(false);
+    setHoraSolicitud('');
   };
 
   // Cargar elemento del carrito para editarlo
@@ -352,6 +368,7 @@ export function ValeFormModal({
       setDepartamentoValeId(item.payload.departamentoValeId ? String(item.payload.departamentoValeId) : '');
       setNuevaLinea('');
     }
+    setAreaSeleccionada(item.payload.area ?? null);
 
     setFechaSolicitud(item.payload.fechaSolicitud);
     setTieneHoraSolicitud(Boolean(item.payload.tieneHoraSolicitud));
@@ -397,13 +414,13 @@ export function ValeFormModal({
     );
 
     setEditingCartItemId(null);
-    setFolio('');
+    resetFormularioPreservandoFecha();
   };
 
   // Cancelar edición de un elemento del carrito
   const handleCancelarEdicion = () => {
     setEditingCartItemId(null);
-    setFolio('');
+    resetFormularioPreservandoFecha();
     setError(null);
   };
 
@@ -411,7 +428,7 @@ export function ValeFormModal({
   const handleEliminarItem = (itemId: string) => {
     if (editingCartItemId === itemId) {
       setEditingCartItemId(null);
-      setFolio('');
+      resetFormularioPreservandoFecha();
     }
     setCarrito((prev) => prev.filter((item) => item.id !== itemId));
   };
@@ -420,6 +437,7 @@ export function ValeFormModal({
   const handleVaciarCarrito = () => {
     setCarrito([]);
     setEditingCartItemId(null);
+    resetFormularioPreservandoFecha();
     setError(null);
   };
 
@@ -603,11 +621,26 @@ export function ValeFormModal({
       {/* Fila 2: Línea con buscador integrado */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label htmlFor="lineaSelect">Línea</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="lineaSelect">Línea</Label>
+            {!modoNuevaLinea && selectedLinea?.areaFija && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-app-surface-muted text-text-secondary border border-border">
+                Área: {selectedLinea.areaFija}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => {
-              setModoNuevaLinea((v) => !v);
+              setModoNuevaLinea((v) => {
+                const next = !v;
+                if (next) {
+                  setAreaSeleccionada(null);
+                } else {
+                  setAreaSeleccionada(selectedLinea?.areaFija ?? null);
+                }
+                return next;
+              });
               setIsLineaOpen(false);
               setError(null);
             }}
@@ -694,6 +727,15 @@ export function ValeFormModal({
                           type="button"
                           onClick={() => {
                             setDepartamentoValeId(String(d.id));
+                            if (d.areaFija) {
+                              setAreaSeleccionada(d.areaFija);
+                            } else {
+                              setAreaSeleccionada(
+                                valeToEdit && valeToEdit.departamentoValeId === d.id
+                                  ? (valeToEdit.area ?? null)
+                                  : null,
+                              );
+                            }
                             setIsLineaOpen(false);
                             setLineaSearch('');
                           }}
@@ -725,6 +767,43 @@ export function ValeFormModal({
           </div>
         )}
       </div>
+
+      {/* Selector de Área Operativa condicional (para departamentos comodín como B7 o líneas nuevas) */}
+      {(modoNuevaLinea || selectedLinea?.requiereSeleccionArea || (!selectedLinea?.areaFija && Boolean(departamentoValeId))) && (
+        <div className="space-y-1.5 p-3 rounded-lg bg-cuadra-arena/40 border border-cuadra-marrone/20">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+              <Icon name="category" size="14px" className="text-brand-primary" />
+              Área Operativa <span className="text-status-error">*</span>
+            </Label>
+            <span className="text-[10px] text-text-muted">
+              {modoNuevaLinea
+                ? 'Indica a qué área pertenece la nueva línea'
+                : `"${selectedLinea?.nombre}" requiere seleccionar su área`}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 pt-0.5">
+            {(['BOTA', 'ACCESORIOS', 'OTRO'] as const).map((area) => {
+              const isSelected = areaSeleccionada === area;
+              return (
+                <button
+                  key={area}
+                  type="button"
+                  onClick={() => setAreaSeleccionada(area)}
+                  className={`py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-brand-primary text-white shadow-xs ring-2 ring-brand-primary/30'
+                      : 'bg-app-surface text-text-secondary border border-border hover:bg-app-surface-muted hover:text-text-primary'
+                  }`}
+                >
+                  {isSelected && <Icon name="check" size="13px" />}
+                  <span>{area}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Fila 3: Fecha de Solicitud + Hora ultra discreta */}
       <div className="space-y-1.5">

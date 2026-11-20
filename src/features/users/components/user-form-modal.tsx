@@ -658,6 +658,7 @@ export function UserFormModal({
                   else if (r.codigo === 'ALMACENISTA') label = 'Almacenistas';
                   else if (r.codigo === 'AUDITOR') label = 'Auditor';
                   else if (r.codigo === 'SUPER_ADMIN') label = 'Super Admin';
+                  else if (r.codigo === 'VISUALIZADOR') label = 'Visualizador';
 
                   return (
                     <option key={r.id} value={r.id}>

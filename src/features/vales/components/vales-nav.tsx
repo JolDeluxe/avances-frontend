@@ -60,7 +60,7 @@ export function ValesNav({ className }: { className?: string }): ReactNode {
   }
 
   const isAlmacenista = rol === 'ALMACENISTA';
-  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin);
+  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin || rol === 'VISUALIZADOR');
 
   // Orden canónico basado en permisos efectivos:
   // - Agregar +: Solo si tiene permiso de crear

@@ -35,7 +35,7 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     icon: 'group',
     route: ROUTES.USUARIOS,
     permission: PERMISOS.USUARIO_VER,
-    allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR'],
   },
   {
     id: 'lineas',

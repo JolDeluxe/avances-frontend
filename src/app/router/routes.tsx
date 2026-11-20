@@ -119,7 +119,7 @@ function ListadosIndexRedirect() {
   const session = useAuthSession();
 
   // Si es el usuario admin (Super Admin) o entra a la app, redirigir a /listados/pendientes directamente
-  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN') {
+  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN' || rol === 'VISUALIZADOR') {
     return <Navigate to={ROUTES.LISTADOS_PENDIENTES} replace />;
   }
 
@@ -145,7 +145,7 @@ function ValesIndexRedirect() {
   const { rol, can, canAny } = usePermissions();
   const session = useAuthSession();
 
-  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN') {
+  if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN' || rol === 'VISUALIZADOR') {
     return <Navigate to={ROUTES.VALES_PENDIENTES} replace />;
   }
 
@@ -207,7 +207,7 @@ export const routes: RouteObject[] = [
             path: ROUTES.USUARIOS,
             element: (
               <RequireRole
-                allowedRoles={['SUPER_ADMIN', 'ADMIN']}
+                allowedRoles={['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR']}
                 fallbackRoute={ROUTES.LISTADOS}
               >
                 <RequirePermission
@@ -307,7 +307,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_PENDIENTES,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'AUDITOR', 'REGISTRADOR', 'SUPERVISOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'AUDITOR', 'REGISTRADOR', 'SUPERVISOR', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosPendientesPage />)}
@@ -318,7 +318,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_ALMACEN,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosAlmacenPage />)}
@@ -329,7 +329,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_AUDITORIA,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosAuditoriaPage />)}
@@ -340,7 +340,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_HISTORIAL,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'REGISTRADOR', 'AUDITOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'REGISTRADOR', 'AUDITOR', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosHistorialPage />)}
@@ -408,7 +408,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.VALES_ALMACEN,
                 element: (
                   <RequirePermission
-                    anyPermission={[PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR]}
+                    anyPermission={[PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR, PERMISOS.VALE_VER]}
                     fallbackRoute={ROUTES.VALES}
                   >
                     {withSuspense(<ValesAlmacenPage />)}
@@ -419,11 +419,11 @@ export const routes: RouteObject[] = [
                 path: ROUTES.VALES_AUDITORIA,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.VALES}
                   >
                     <RequirePermission
-                      permission={PERMISOS.VALE_DESCONTAR}
+                      anyPermission={[PERMISOS.VALE_DESCONTAR, PERMISOS.VALE_VER]}
                       fallbackRoute={ROUTES.VALES}
                     >
                       {withSuspense(<ValesAuditoriaPage />)}

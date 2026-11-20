@@ -1,6 +1,7 @@
 import { useLayoutUI } from '../use-layout-ui';
 import { SidebarHeader } from './sidebar-header';
 import { SidebarItem } from './sidebar-item';
+import { APP_VERSION } from '@/config/app-version';
 import type { NavItem } from '@/shared/types/navigation.types';
 
 interface SidebarProps {
@@ -19,7 +20,7 @@ interface SidebarProps {
  * - Mobile: max-lg:bg-marca-secundario/80 max-lg:backdrop-blur-2xl
  * - Footer con badge bg-marca-primario/50 text-cuadra-arena
  */
-export function Sidebar({ navItems, appName = 'Almacén MBC', appVersion = 'v.desarrollo' }: SidebarProps) {
+export function Sidebar({ navItems, appName = 'Almacén MBC', appVersion = APP_VERSION }: SidebarProps) {
   const { sidebarExpanded } = useLayoutUI();
 
   return (
