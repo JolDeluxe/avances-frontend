@@ -11,9 +11,9 @@ export interface DepartamentoValeAuthSimple {
   requiereSeleccionArea?: boolean;
 }
 
-/** Indica si un valor multi-frente (ej. "DIRECTOS,BOLSAS" o "TODOS") autoriza el frente dado. */
+/** Indica si un valor multi-frente (ej. "DIRECTOS,BOLSAS" o "TODOS") autoriza el frente dado. Deny-by-default si no hay valor. */
 export function frenteAutorizado(valor: string | null | undefined, frente: string): boolean {
-  if (!valor) return true;
+  if (!valor || valor.trim() === '') return false;
   const lista = valor.split(',').map((s) => s.trim().toUpperCase());
   return lista.includes('TODOS') || lista.includes(frente.toUpperCase());
 }

@@ -32,15 +32,13 @@ function formatFecha(fechaStr: string): string {
  * - Una vez que el vale es separado por Almacén, desaparece de esta vista de alta.
  */
 export function ValesAdministracionPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission, hasAnyPermission } = usePermissions();
 
-  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:crear', 'vale:editar']);
-  const canCrear = isSuperAdmin || isAdmin || hasPermission('vale:crear');
-  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
-  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
-  const canRetroceder =
-    (isSuperAdmin || isAdmin) ||
-    hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canVer = hasAnyPermission(['vale:ver', 'vale:crear', 'vale:editar']);
+  const canCrear = hasPermission('vale:crear');
+  const canEditar = hasPermission('vale:editar');
+  const canCancelar = hasPermission('vale:cancelar');
+  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
@@ -269,14 +267,19 @@ export function ValesAdministracionPage(): ReactNode {
         onCatalogosChanged={reloadCatalogos}
         onSuccess={(saved) => {
           const isEditing = Boolean(selectedVale);
+          const items = Array.isArray(saved) ? saved : saved ? [saved] : [];
+          const folios = items.map((i) => i.folio).join(', ');
           showFeedback(
             'success',
             isEditing
               ? 'Vale actualizado correctamente.'
-              : `Vale ${saved?.folio ?? ''} creado correctamente.`,
+              : items.length > 1
+                ? `${items.length} vales creados correctamente.`
+                : `Vale ${folios} creado correctamente.`,
           );
-          if (saved?.id) {
-            triggerHighlight(saved.id);
+          const ids = items.map((i) => i.id);
+          if (ids.length > 0) {
+            triggerHighlight(ids);
           }
           void reload(true);
         }}

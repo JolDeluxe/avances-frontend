@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type ReactNode, type FormEvent } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,9 +33,167 @@ export interface UserFormModalProps {
 }
 
 const AREAS_VALE_OPTIONS: Array<{ id: AreaValeAuth; label: string }> = [
-  { id: 'BOTA', label: 'Área Bota' },
-  { id: 'ACCESORIOS', label: 'Área Accesorios' },
-  { id: 'OTRO', label: 'Área Otro' },
+  { id: 'BOTA', label: 'BOTA' },
+  { id: 'ACCESORIOS', label: 'ACCESORIOS' },
+  { id: 'OTRO', label: 'OTRO' },
+];
+
+/** Metadatos amigables para presentar permisos comprensibles al SUPER_ADMIN */
+const PERMISOS_INFO: Record<string, { nombre: string; descripcion: string; categoria: string }> = {
+  // Vales de materia prima
+  'vale:ver': {
+    nombre: 'Ver Vales',
+    descripcion: 'Consultar tableros, vales pendientes, detalle e historial',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:crear': {
+    nombre: 'Crear Vales',
+    descripcion: 'Registrar nuevos vales de materia prima en el sistema',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:editar': {
+    nombre: 'Editar Vales',
+    descripcion: 'Modificar datos operativos de un vale mientras esté Pendiente',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:separar': {
+    nombre: 'Separar Vales',
+    descripcion: 'Confirmar separación de materiales del vale en almacén',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:entregar': {
+    nombre: 'Entregar Vales',
+    descripcion: 'Registrar entrega física de materiales al departamento solicitante',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:cancelar': {
+    nombre: 'Cancelar Vales',
+    descripcion: 'Anular un vale no entregado (Pendiente/Separado) con motivo obligatorio',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:descontar': {
+    nombre: 'Descontar Vales',
+    descripcion: 'Auditar y validar el descuento contable de inventario en ERP',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:retroceder': {
+    nombre: 'Retroceder Operación de Vales',
+    descripcion: 'Regresar un paso operativo (Entregado → Separado o Separado → Pendiente)',
+    categoria: 'Vales de Materia Prima',
+  },
+  'vale:retroceder_descuento': {
+    nombre: 'Revertir Descuento de Vales',
+    descripcion: 'Reabrir un vale Descontado de vuelta a Entregado en auditoría',
+    categoria: 'Vales de Materia Prima',
+  },
+
+  // Listados de producción
+  'listado:ver': {
+    nombre: 'Ver Listados',
+    descripcion: 'Consultar tableros, listados de producción y frentes de surtido',
+    categoria: 'Listados de Producción',
+  },
+  'listado:crear': {
+    nombre: 'Crear Listados',
+    descripcion: 'Registrar o cargar nuevos listados de producción para surtido',
+    categoria: 'Listados de Producción',
+  },
+  'listado:editar': {
+    nombre: 'Editar Listados',
+    descripcion: 'Modificar datos de un listado mientras esté en estado Pendiente',
+    categoria: 'Listados de Producción',
+  },
+  'listado:separar': {
+    nombre: 'Separar Listados',
+    descripcion: 'Marcar frentes de listado como separados físicamente en almacén',
+    categoria: 'Listados de Producción',
+  },
+  'listado:entregar': {
+    nombre: 'Entregar Listados',
+    descripcion: 'Registrar la entrega de frentes a las líneas de producción',
+    categoria: 'Listados de Producción',
+  },
+  'listado:cancelar': {
+    nombre: 'Cancelar Listados',
+    descripcion: 'Anular un listado operativo con justificación antes de su entrega',
+    categoria: 'Listados de Producción',
+  },
+  'listado:retroceder': {
+    nombre: 'Retroceder Listados',
+    descripcion: 'Regresar frentes a un estado previo para correcciones con motivo',
+    categoria: 'Listados de Producción',
+  },
+  'listado:descontar': {
+    nombre: 'Descontar Listados',
+    descripcion: 'Validar y registrar el descuento final de inventario en ERP',
+    categoria: 'Listados de Producción',
+  },
+
+  // Usuarios y accesos
+  'usuario:ver': {
+    nombre: 'Ver Usuarios',
+    descripcion: 'Consultar el catálogo de usuarios, fichas y estados',
+    categoria: 'Usuarios y Seguridad',
+  },
+  'usuario:crear': {
+    nombre: 'Crear Usuarios',
+    descripcion: 'Dar de alta nuevos usuarios y colaboradores en el sistema',
+    categoria: 'Usuarios y Seguridad',
+  },
+  'usuario:editar': {
+    nombre: 'Editar Usuarios',
+    descripcion: 'Modificar perfiles, roles, líneas y departamentos de usuarios',
+    categoria: 'Usuarios y Seguridad',
+  },
+  'usuario:eliminar': {
+    nombre: 'Desactivar Usuarios',
+    descripcion: 'Suspender o dar de baja lógicamente cuentas de usuario',
+    categoria: 'Usuarios y Seguridad',
+  },
+  'usuario:password:ver': {
+    nombre: 'Revelar Contraseña',
+    descripcion: 'Capacidad administrativa reversible para soporte de contraseñas',
+    categoria: 'Usuarios y Seguridad',
+  },
+
+  // Catálogos y Sistema
+  'departamento:ver': {
+    nombre: 'Ver Catálogos',
+    descripcion: 'Consultar departamentos y líneas de producción activas',
+    categoria: 'Catálogos y Sistema',
+  },
+  'departamento:administrar': {
+    nombre: 'Administrar Líneas / Maquilas',
+    descripcion: 'Crear, editar y organizar líneas de producción y maquilas',
+    categoria: 'Catálogos y Sistema',
+  },
+  'rol:ver': {
+    nombre: 'Ver Roles',
+    descripcion: 'Consultar roles y permisos base del sistema',
+    categoria: 'Catálogos y Sistema',
+  },
+  'permiso:ver': {
+    nombre: 'Ver Permisos',
+    descripcion: 'Consultar la matriz de capacidades y permisos',
+    categoria: 'Catálogos y Sistema',
+  },
+  'permiso:administrar': {
+    nombre: 'Administrar Permisos',
+    descripcion: 'Asignar o modificar excepciones avanzadas de permisos',
+    categoria: 'Catálogos y Sistema',
+  },
+  'registro_sistema:ver': {
+    nombre: 'Ver Bitácora de Auditoría',
+    descripcion: 'Consultar el registro de eventos y auditoría del sistema',
+    categoria: 'Catálogos y Sistema',
+  },
+};
+
+const CATEGORIAS_ORDEN = [
+  'Vales de Materia Prima',
+  'Listados de Producción',
+  'Usuarios y Seguridad',
+  'Catálogos y Sistema',
 ];
 
 export function UserFormModal({
@@ -64,6 +222,7 @@ export function UserFormModal({
   const [frentesSurtido, setFrentesSurtido] = useState<string[]>([]);
   const [frentesAuditor, setFrentesAuditor] = useState<string[]>([]);
   const [lineasAsignadas, setLineasAsignadas] = useState<number[]>([]);
+  const [modoLineas, setModoLineas] = useState<'TODAS' | 'ESPECIFICAS'>('TODAS');
 
   // Alcance acumulativo del módulo VALES
   const [areasVale, setAreasVale] = useState<AreaValeAuth[]>([]);
@@ -119,12 +278,17 @@ export function UserFormModal({
         } else {
           setFrentesAuditor([]);
         }
-        const activeLinesIds = new Set(availableLines.map((l) => l.id));
-        setLineasAsignadas(
-          user.lineasAsignadas
-            ? user.lineasAsignadas.filter((l) => activeLinesIds.has(l.id)).map((l) => l.id)
-            : [],
-        );
+        if (user.lineasAsignadas && user.lineasAsignadas.length > 0) {
+          const activeLinesIds = new Set(availableLines.map((l) => l.id));
+          const filtered = user.lineasAsignadas
+            .filter((l) => activeLinesIds.has(l.id))
+            .map((l) => l.id);
+          setLineasAsignadas(filtered);
+          setModoLineas(filtered.length > 0 ? 'ESPECIFICAS' : 'TODAS');
+        } else {
+          setLineasAsignadas([]);
+          setModoLineas('TODAS');
+        }
 
         setAreasVale(user.areasVale ?? []);
         setDepartamentosValeIds(
@@ -175,6 +339,7 @@ export function UserFormModal({
           setFrentesAuditor([]);
         }
         setLineasAsignadas([]);
+        setModoLineas('TODAS');
         setAreasVale([]);
         setDepartamentosValeIds([]);
         setExcepcionesMap({});
@@ -230,16 +395,36 @@ export function UserFormModal({
   };
 
   const handleToggleAreaVale = (area: AreaValeAuth) => {
-    setAreasVale((prev) =>
-      prev.includes(area) ? prev.filter((item) => item !== area) : [...prev, area],
-    );
+    setAreasVale((prev) => {
+      const isSelecting = !prev.includes(area);
+      const nextAreas = isSelecting ? [...prev, area] : prev.filter((item) => item !== area);
+
+      // Si se está activando un área completa, limpiar los departamentos individuales de esa área
+      if (isSelecting) {
+        setDepartamentosValeIds((prevDeptos) =>
+          prevDeptos.filter((deptoId) => {
+            const depto = availableDepartamentosVale.find((d) => d.id === deptoId);
+            if (!depto) return true;
+            if (area === 'BOTA' && depto.areaFija === 'BOTA') return false;
+            if (area === 'ACCESORIOS' && depto.areaFija === 'ACCESORIOS') return false;
+            if (
+              area === 'OTRO' &&
+              (depto.areaFija === 'OTRO' ||
+                depto.requiereSeleccionArea ||
+                (!depto.areaFija && depto.areaFija !== 'BOTA' && depto.areaFija !== 'ACCESORIOS'))
+            ) {
+              return false;
+            }
+            return true;
+          }),
+        );
+      }
+
+      return nextAreas;
+    });
   };
 
-  const handleToggleDeptoVale = (id: number) => {
-    setDepartamentosValeIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
+
 
   const handleCyclePermisoExcepcion = (permiso: PermisoSimple, isBase: boolean) => {
     setExcepcionesMap((prev) => {
@@ -294,7 +479,7 @@ export function UserFormModal({
     }
 
     try {
-      const lineas = isAlmacenista ? lineasValidas : [];
+      const lineas = isAlmacenista ? (modoLineas === 'TODAS' ? [] : lineasValidas) : [];
       const tipoSurtidoCalculado = isAlmacenista
         ? frentesSurtido.length === 3
           ? 'TODOS'
@@ -384,6 +569,18 @@ export function UserFormModal({
 
   const permisosBaseRol = new Set(selectedRole?.permisosBase ?? []);
   const excepcionesCount = Object.keys(excepcionesMap).length;
+
+  // Agrupar permisos por categorías comprensibles
+  const permisosPorCategoria = useMemo(() => {
+    const map: Record<string, PermisoSimple[]> = {};
+    permisos.forEach((p) => {
+      const meta = PERMISOS_INFO[p.codigo];
+      const cat = meta?.categoria || (p.modulo ? p.modulo.toUpperCase() : 'Catálogos y Sistema');
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(p);
+    });
+    return map;
+  }, [permisos]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-xl">
@@ -579,133 +776,153 @@ export function UserFormModal({
 
           {/* Líneas Asignadas solo para ALMACENISTA */}
           {isAlmacenista && (
-            <div className="space-y-3 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
+            <div className="space-y-2.5 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider">
-                  Líneas de Producción Autorizadas (Listados)
+                  Líneas de Producción (Listados)
                 </Label>
                 <span className="text-2xs text-text-muted">
-                  {lineasAsignadas.length} seleccionada(s)
+                  {modoLineas === 'TODAS'
+                    ? 'Acceso global (todas)'
+                    : `${lineasAsignadas.length} seleccionada(s)`}
                 </span>
               </div>
 
-              {availableLines.length > 0 ? (
+              {/* Selector de modo: Todas vs Específicas */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModoLineas('TODAS');
+                    setLineasAsignadas([]);
+                  }}
+                  className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-colors cursor-pointer text-center ${
+                    modoLineas === 'TODAS'
+                      ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-semibold'
+                      : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted'
+                  }`}
+                >
+                  Todas las líneas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoLineas('ESPECIFICAS')}
+                  className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-colors cursor-pointer text-center ${
+                    modoLineas === 'ESPECIFICAS'
+                      ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-semibold'
+                      : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted'
+                  }`}
+                >
+                  Líneas específicas
+                </button>
+              </div>
+
+              {modoLineas === 'TODAS' ? (
+                <p className="text-2xs text-text-muted italic px-1">
+                  Acceso sin restricción para surtir en todas las líneas de producción activas.
+                </p>
+              ) : availableLines.length > 0 ? (
                 (() => {
                   const lineasBota = availableLines.filter((l) => l.area === 'BOTA');
                   const lineasAccesorios = availableLines.filter((l) => l.area !== 'BOTA');
                   const soloBolsas = frentesSurtido.length === 1 && frentesSurtido[0] === 'BOLSAS';
 
-                  const renderLineItem = (linea: LineaProduccionSimple & { area?: string }) => {
-                    const isChecked = lineasAsignadas.includes(linea.id);
-                    const isBota = linea.area === 'BOTA';
-                    const isBlockedForBolsas = soloBolsas && isBota;
-
-                    return (
-                      <label
-                        key={linea.id}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-colors ${
-                          isBlockedForBolsas
-                            ? 'opacity-40 cursor-not-allowed bg-app-surface border-border text-text-muted'
-                            : isChecked
-                              ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-medium cursor-pointer'
-                              : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted cursor-pointer'
-                        }`}
-                        title={
-                          isBlockedForBolsas
-                            ? 'Incompatible: Surtido exclusivo de BOLSAS no permite líneas de área BOTA'
-                            : undefined
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked && !isBlockedForBolsas}
-                          disabled={isBlockedForBolsas}
-                          onChange={() => handleToggleLinea(linea.id)}
-                          className="rounded border-border text-marca-primario focus:ring-marca-primario/25 h-3.5 w-3.5 cursor-pointer disabled:cursor-not-allowed"
-                        />
-                        <span className="truncate">{linea.nombre}</span>
-                        {isBlockedForBolsas && (
-                          <span className="ml-auto text-3xs font-mono text-danger">(BOTA)</span>
-                        )}
-                      </label>
-                    );
-                  };
-
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Columna 1: Área BOTA */}
-                      <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
-                        <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                          <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-marca-primario inline-block"></span>
-                            Área Bota
-                          </span>
-                          <span className="text-3xs text-text-muted">
-                            {lineasBota.filter((l) => lineasAsignadas.includes(l.id)).length} / {lineasBota.length}
-                          </span>
-                        </div>
-                        {lineasBota.length > 0 ? (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                            {lineasBota.map(renderLineItem)}
+                    <div className="space-y-2 pt-1 border-t border-border/50">
+                      {lineasBota.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between pb-1">
+                            <span className="text-3xs font-semibold uppercase tracking-wider text-text-secondary">
+                              Área Bota
+                            </span>
+                            <span className="text-3xs text-text-muted">
+                              {lineasBota.filter((l) => lineasAsignadas.includes(l.id)).length} / {lineasBota.length}
+                            </span>
                           </div>
-                        ) : (
-                          <p className="text-2xs text-text-muted italic py-1">Sin líneas de Bota</p>
-                        )}
-                      </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {lineasBota.map((linea) => {
+                              const isChecked = lineasAsignadas.includes(linea.id);
+                              const isBlocked = soloBolsas;
+                              return (
+                                <button
+                                  key={linea.id}
+                                  type="button"
+                                  disabled={isBlocked}
+                                  onClick={() => handleToggleLinea(linea.id)}
+                                  className={`px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                                    isBlocked
+                                      ? 'opacity-40 cursor-not-allowed bg-app-surface border border-border text-text-muted'
+                                      : isChecked
+                                      ? 'bg-marca-primario/15 border border-marca-primario/30 text-marca-primario font-medium'
+                                      : 'bg-app-surface border border-border text-text-secondary hover:bg-app-surface-muted'
+                                  }`}
+                                >
+                                  {isChecked ? '✓ ' : ''}{linea.nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
-                      {/* Columna 2: Área ACCESORIOS */}
-                      <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
-                        <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                          <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-cuadra-oro inline-block"></span>
-                            Área Accesorios
-                          </span>
-                          <span className="text-3xs text-text-muted">
-                            {lineasAccesorios.filter((l) => lineasAsignadas.includes(l.id)).length} / {lineasAccesorios.length}
-                          </span>
-                        </div>
-                        {lineasAccesorios.length > 0 ? (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                            {lineasAccesorios.map(renderLineItem)}
+                      {lineasAccesorios.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between pb-1 pt-1">
+                            <span className="text-3xs font-semibold uppercase tracking-wider text-text-secondary">
+                              Área Accesorios
+                            </span>
+                            <span className="text-3xs text-text-muted">
+                              {lineasAccesorios.filter((l) => lineasAsignadas.includes(l.id)).length} / {lineasAccesorios.length}
+                            </span>
                           </div>
-                        ) : (
-                          <p className="text-2xs text-text-muted italic py-1">Sin líneas de Accesorios</p>
-                        )}
-                      </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {lineasAccesorios.map((linea) => {
+                              const isChecked = lineasAsignadas.includes(linea.id);
+                              return (
+                                <button
+                                  key={linea.id}
+                                  type="button"
+                                  onClick={() => handleToggleLinea(linea.id)}
+                                  className={`px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                                    isChecked
+                                      ? 'bg-marca-primario/15 border border-marca-primario/30 text-marca-primario font-medium'
+                                      : 'bg-app-surface border border-border text-text-secondary hover:bg-app-surface-muted'
+                                  }`}
+                                >
+                                  {isChecked ? '✓ ' : ''}{linea.nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()
               ) : (
                 <p className="text-xs text-text-muted italic">
-                  {departamentoId
-                    ? 'No hay líneas de producción configuradas en este departamento.'
-                    : 'Selecciona un departamento para ver sus líneas de producción.'}
+                  No hay líneas de producción configuradas en este departamento.
                 </p>
               )}
             </div>
           )}
 
-          {/* Alcance Acumulativo del Módulo VALES para ALMACENISTA */}
+          {/* Autorización de Vales para ALMACENISTA */}
           {isAlmacenista && (
             <div className="space-y-3 p-3.5 bg-cuadra-arena/30 rounded-xl border border-border">
               <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider block">
-                    Alcance Operativo de Vales (Acumulativo)
-                  </Label>
-                  <p className="text-[11px] text-text-muted mt-0.5">
-                    Puedes autorizar áreas completas y/o departamentos individuales adicionales.
-                  </p>
-                </div>
+                <Label className="text-xs font-semibold text-text-primary uppercase tracking-wider block">
+                  AUTORIZACIÓN DE VALES
+                </Label>
                 <span className="text-2xs font-mono text-text-muted shrink-0">
                   {areasVale.length} área(s) · {departamentosValeIds.length} depto(s)
                 </span>
               </div>
 
-              {/* 1. Áreas completas de Vales */}
+              {/* 1. Áreas de Vales */}
               <div className="space-y-1.5">
                 <span className="text-2xs font-semibold uppercase tracking-wider text-text-secondary block">
-                  Áreas completas autorizadas
+                  Áreas
                 </span>
                 <div className="grid grid-cols-3 gap-2">
                   {AREAS_VALE_OPTIONS.map((areaOpt) => {
@@ -732,94 +949,141 @@ export function UserFormModal({
                 </div>
               </div>
 
-              {/* 2. Departamentos Operativos Individuales de Vales */}
-              {availableDepartamentosVale.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-secondary block">
-                    Departamentos operativos específicos
-                  </span>
-                  {(() => {
-                    const deptosBota = availableDepartamentosVale.filter((d) => d.areaFija === 'BOTA');
-                    const deptosAcc = availableDepartamentosVale.filter(
-                      (d) => d.areaFija === 'ACCESORIOS' || d.requiereSeleccionArea || d.areaFija === 'OTRO',
-                    );
+              {/* 2. Departamentos Específicos: Selector Limpio + Chips */}
+              {availableDepartamentosVale.length > 0 && (() => {
+                const showBota = !areasVale.includes('BOTA');
+                const showAcc = !areasVale.includes('ACCESORIOS');
+                const showOtro = !areasVale.includes('OTRO');
 
-                    const renderDeptoItem = (depto: DepartamentoValeCatalogSimple) => {
-                      const isChecked = departamentosValeIds.includes(depto.id);
-                      return (
-                        <label
-                          key={depto.id}
-                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
-                            isChecked
-                              ? 'bg-marca-primario/10 border-marca-primario/30 text-marca-primario font-medium'
-                              : 'bg-app-surface border-border text-text-secondary hover:bg-app-surface-muted'
-                          }`}
+                // Si todas las áreas están seleccionadas, las áreas cubren todo
+                if (!showBota && !showAcc && !showOtro) {
+                  return (
+                    <p className="text-2xs text-text-muted italic pt-1 border-t border-border/50">
+                      Todas las áreas de vales seleccionadas (acceso total a departamentos).
+                    </p>
+                  );
+                }
+
+                // Deptos que aún pueden ser asignados individualmente
+                const eligibleDeptos = availableDepartamentosVale.filter((d) => {
+                  const isBota = d.areaFija === 'BOTA';
+                  const isAcc = d.areaFija === 'ACCESORIOS';
+                  const isOtro =
+                    d.areaFija === 'OTRO' ||
+                    d.requiereSeleccionArea ||
+                    (!d.areaFija && d.areaFija !== 'BOTA');
+                  if (isBota && !showBota) return false;
+                  if (isAcc && !showAcc) return false;
+                  if (isOtro && !showOtro) return false;
+                  return true;
+                });
+
+                const deptosBota = eligibleDeptos.filter((d) => d.areaFija === 'BOTA');
+                const deptosAccYOtros = eligibleDeptos.filter((d) => d.areaFija !== 'BOTA');
+
+                const selectedDeptos = availableDepartamentosVale.filter((d) =>
+                  departamentosValeIds.includes(d.id),
+                );
+
+                const handleSelectDepto = (e: React.ChangeEvent<HTMLSelectElement>) => {
+                  const val = Number(e.target.value);
+                  if (val && !departamentosValeIds.includes(val)) {
+                    setDepartamentosValeIds((prev) => [...prev, val]);
+                  }
+                  e.target.value = '';
+                };
+
+                const handleRemoveDepto = (id: number) => {
+                  setDepartamentosValeIds((prev) => prev.filter((dId) => dId !== id));
+                };
+
+                return (
+                  <div className="space-y-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xs font-semibold uppercase tracking-wider text-text-secondary block">
+                        Departamentos Específicos (Opcional)
+                      </span>
+                      {selectedDeptos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDepartamentosValeIds([])}
+                          className="text-3xs text-danger hover:underline cursor-pointer"
                         >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleToggleDeptoVale(depto.id)}
-                            className="rounded border-border text-marca-primario focus:ring-marca-primario/25 h-3.5 w-3.5 cursor-pointer"
-                          />
-                          <span className="truncate">{depto.nombre}</span>
-                          {depto.requiereSeleccionArea && (
-                            <span className="ml-auto text-3xs font-mono px-1 py-0.2 rounded bg-amber-500/15 text-amber-700">
-                              Área por vale
-                            </span>
-                          )}
-                        </label>
-                      );
-                    };
+                          Quitar todos ({selectedDeptos.length})
+                        </button>
+                      )}
+                    </div>
 
-                    return (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
-                          <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                            <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-marca-primario inline-block"></span>
-                              Deptos. Bota
-                            </span>
-                            <span className="text-3xs text-text-muted">
-                              {deptosBota.filter((d) => departamentosValeIds.includes(d.id)).length} / {deptosBota.length}
-                            </span>
-                          </div>
-                          {deptosBota.length > 0 ? (
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                              {deptosBota.map(renderDeptoItem)}
-                            </div>
-                          ) : (
-                            <p className="text-2xs text-text-muted italic py-1">Sin departamentos</p>
-                          )}
-                        </div>
+                    {/* Selector desplegable limpio */}
+                    <div className="relative">
+                      <select
+                        value=""
+                        onChange={handleSelectDepto}
+                        className="w-full h-9 px-3 text-xs bg-app-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-marca-primario/30 cursor-pointer"
+                      >
+                        <option value="">+ Seleccionar departamento para autorizar...</option>
+                        {deptosBota.length > 0 && (
+                          <optgroup label="Área BOTA">
+                            {deptosBota.map((d) => (
+                              <option
+                                key={d.id}
+                                value={d.id}
+                                disabled={departamentosValeIds.includes(d.id)}
+                              >
+                                {departamentosValeIds.includes(d.id) ? '✓ ' : ''}{d.nombre}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {deptosAccYOtros.length > 0 && (
+                          <optgroup label="Área ACCESORIOS / OTROS">
+                            {deptosAccYOtros.map((d) => (
+                              <option
+                                key={d.id}
+                                value={d.id}
+                                disabled={departamentosValeIds.includes(d.id)}
+                              >
+                                {departamentosValeIds.includes(d.id) ? '✓ ' : ''}{d.nombre}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
 
-                        <div className="p-2.5 rounded-lg border border-border/80 bg-app-surface/60 space-y-2">
-                          <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                            <span className="text-2xs font-semibold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cuadra-oro inline-block"></span>
-                              Deptos. Accesorios / Otros
-                            </span>
-                            <span className="text-3xs text-text-muted">
-                              {deptosAcc.filter((d) => departamentosValeIds.includes(d.id)).length} / {deptosAcc.length}
-                            </span>
-                          </div>
-                          {deptosAcc.length > 0 ? (
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                              {deptosAcc.map(renderDeptoItem)}
-                            </div>
-                          ) : (
-                            <p className="text-2xs text-text-muted italic py-1">Sin departamentos</p>
-                          )}
-                        </div>
+                    {/* Chips de departamentos seleccionados */}
+                    {selectedDeptos.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {selectedDeptos.map((d) => (
+                          <span
+                            key={d.id}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-app-surface border border-border text-text-primary shadow-2xs"
+                          >
+                            <span>{d.nombre}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDepto(d.id)}
+                              className="text-text-muted hover:text-danger text-xs font-bold leading-none cursor-pointer p-0.5"
+                              title={`Quitar ${d.nombre}`}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
+                    ) : (
+                      <p className="text-2xs text-text-muted italic">
+                        Sin departamentos individuales asignados (acceso regido por las áreas de arriba).
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
-          {/* Excepciones de Permisos Efectivos por Usuario */}
-          {permisos.length > 0 && selectedRole?.codigo !== 'SUPER_ADMIN' && (
+          {/* Permisos Efectivos por Usuario (Exclusivo para SUPER_ADMIN) */}
+          {isSuperAdminUser && permisos.length > 0 && selectedRole?.codigo !== 'SUPER_ADMIN' && (
             <div className="rounded-xl border border-border bg-app-surface overflow-hidden">
               <button
                 type="button"
@@ -828,12 +1092,12 @@ export function UserFormModal({
               >
                 <div className="flex items-center gap-2">
                   <Icon name="tune" size="xs" className="text-brand-primary" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">
-                    Permisos Efectivos y Excepciones
+                  <span className="text-xs font-bold uppercase tracking-wider text-text-primary">
+                    Permisos
                   </span>
                   {excepcionesCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-2xs font-bold bg-brand-primary/15 text-brand-primary">
-                      {excepcionesCount} excepción(es)
+                    <span className="px-2 py-0.5 rounded-full text-2xs font-mono font-bold bg-brand-primary text-white leading-none">
+                      {excepcionesCount}
                     </span>
                   )}
                 </div>
@@ -845,43 +1109,97 @@ export function UserFormModal({
               </button>
 
               {showExcepciones && (
-                <div className="p-3.5 space-y-3 border-t border-border/60">
+                <div className="p-3.5 space-y-4 border-t border-border/60 bg-app-surface/50">
                   <p className="text-[11px] text-text-muted">
-                    Haz clic en un permiso para conceder un permiso adicional al rol o denegar uno heredado.
+                    Haz clic en una capacidad para otorgar un permiso adicional al rol (<span className="text-emerald-700 font-bold">+ Concedido</span>) o revocar uno heredado (<span className="text-danger font-bold line-through">− Denegado</span>).
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                    {permisos.map((permiso) => {
-                      const isBase = permisosBaseRol.has(permiso.codigo);
-                      const exc = excepcionesMap[permiso.id];
-                      const isEffective = (isBase && exc !== 'DENEGAR') || exc === 'CONCEDER';
 
+                  <div className="space-y-4 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                    {CATEGORIAS_ORDEN.filter((cat) => permisosPorCategoria[cat]?.length).map((cat) => {
+                      const items = permisosPorCategoria[cat] || [];
                       return (
-                        <button
-                          key={permiso.id}
-                          type="button"
-                          onClick={() => handleCyclePermisoExcepcion(permiso, isBase)}
-                          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-left text-xs transition-colors cursor-pointer ${
-                            exc === 'CONCEDER'
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-semibold'
-                              : exc === 'DENEGAR'
-                              ? 'bg-danger/10 border-danger/30 text-danger line-through'
-                              : isEffective
-                              ? 'bg-app-surface-muted/60 border-border text-text-primary'
-                              : 'bg-app-surface border-border/60 text-text-muted hover:text-text-secondary'
-                          }`}
-                          title={permiso.descripcion}
-                        >
-                          <span className="font-mono text-[11px] truncate">{permiso.codigo}</span>
-                          <span className="text-[10px] uppercase font-bold shrink-0">
-                            {exc === 'CONCEDER'
-                              ? '+ Concedido'
-                              : exc === 'DENEGAR'
-                              ? '− Denegado'
-                              : isBase
-                              ? 'Rol base'
-                              : 'Inactivo'}
-                          </span>
-                        </button>
+                        <div key={cat} className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-wider text-text-secondary pb-1 border-b border-border/50">
+                            <Icon
+                              name={
+                                cat.includes('Vales')
+                                  ? 'receipt_long'
+                                  : cat.includes('Listados')
+                                  ? 'assignment'
+                                  : cat.includes('Usuarios')
+                                  ? 'group'
+                                  : 'settings'
+                              }
+                              size="13px"
+                              className="text-brand-primary"
+                            />
+                            <span>{cat}</span>
+                            <span className="text-3xs text-text-muted ml-auto font-mono">
+                              {items.filter((p) => {
+                                const isBase = permisosBaseRol.has(p.codigo);
+                                const exc = excepcionesMap[p.id];
+                                return (isBase && exc !== 'DENEGAR') || exc === 'CONCEDER';
+                              }).length} / {items.length} activos
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {items.map((permiso) => {
+                              const info = PERMISOS_INFO[permiso.codigo];
+                              const nombreAmigable = info?.nombre || permiso.nombre || permiso.codigo;
+                              const descripcionAmigable = info?.descripcion || permiso.descripcion;
+                              const isBase = permisosBaseRol.has(permiso.codigo);
+                              const exc = excepcionesMap[permiso.id];
+                              const isEffective = (isBase && exc !== 'DENEGAR') || exc === 'CONCEDER';
+
+                              return (
+                                <button
+                                  key={permiso.id}
+                                  type="button"
+                                  onClick={() => handleCyclePermisoExcepcion(permiso, isBase)}
+                                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer select-none space-y-1 ${
+                                    exc === 'CONCEDER'
+                                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-100 shadow-2xs ring-1 ring-emerald-500/30'
+                                      : exc === 'DENEGAR'
+                                      ? 'bg-danger/10 border-danger/30 text-danger opacity-80 line-through'
+                                      : isEffective
+                                      ? 'bg-app-surface border-border/80 text-text-primary hover:border-brand-primary/50'
+                                      : 'bg-app-surface/50 border-border/40 text-text-muted hover:border-border hover:text-text-secondary'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-1.5 w-full">
+                                    <span className="text-xs font-bold text-text-primary leading-tight">
+                                      {nombreAmigable}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded-full shrink-0 tracking-wide ${
+                                        exc === 'CONCEDER'
+                                          ? 'bg-emerald-600 text-white'
+                                          : exc === 'DENEGAR'
+                                          ? 'bg-danger text-white'
+                                          : isBase
+                                          ? 'bg-brand-primary/15 text-brand-primary'
+                                          : 'bg-cuadra-arena text-text-muted border border-border/70'
+                                      }`}
+                                    >
+                                      {exc === 'CONCEDER'
+                                        ? '+ Concedido'
+                                        : exc === 'DENEGAR'
+                                        ? '− Denegado'
+                                        : isBase
+                                        ? 'Rol base'
+                                        : 'Inactivo'}
+                                    </span>
+                                  </div>
+
+                                  <p className="text-[11px] text-text-secondary leading-snug line-clamp-2">
+                                    {descripcionAmigable}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

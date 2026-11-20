@@ -9,7 +9,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUsers } from '../hooks/use-users';
 import { useUserCatalogs } from '../hooks/use-user-catalogs';
 import { usePermissions } from '@/shared/hooks/use-permissions';
-import { UserStatusBadge, UserRoleBadge, UserSegmentacionBadge } from '../components/user-status-badge';
+import {
+  UserStatusBadge,
+  UserRoleBadge,
+  UserSegmentacionBadge,
+  UserValesBadge,
+} from '../components/user-status-badge';
 import { UserCard } from '../components/user-card';
 import { UserDetailModal } from '../components/user-detail-modal';
 import { UserFormModal } from '../components/user-form-modal';
@@ -170,7 +175,11 @@ export function UsersPage(): ReactNode {
     },
     {
       key: 'segmentacion',
-      header: 'Segmentación',
+      header: (
+        <span title="Frentes de material autorizados para Listados de Producción">
+          Listados
+        </span>
+      ),
       render: (row) => (
         <UserSegmentacionBadge
           tipoSurtidoAlmacen={row.tipoSurtidoAlmacen}
@@ -208,6 +217,21 @@ export function UsersPage(): ReactNode {
           </ul>
         );
       },
+    },
+    {
+      key: 'vales',
+      header: (
+        <span title="Áreas y departamentos operativos autorizados para Vales de Materia Prima">
+          Vales
+        </span>
+      ),
+      render: (row) => (
+        <UserValesBadge
+          areasVale={row.areasVale}
+          departamentosValeAsignados={row.departamentosValeAsignados}
+          rolCodigo={row.rol?.codigo}
+        />
+      ),
     },
     {
       key: 'estado',

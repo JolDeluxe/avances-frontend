@@ -418,12 +418,17 @@ export const routes: RouteObject[] = [
               {
                 path: ROUTES.VALES_AUDITORIA,
                 element: (
-                  <RequirePermission
-                    permission={PERMISOS.VALE_DESCONTAR}
+                  <RequireRole
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'AUDITOR']}
                     fallbackRoute={ROUTES.VALES}
                   >
-                    {withSuspense(<ValesAuditoriaPage />)}
-                  </RequirePermission>
+                    <RequirePermission
+                      permission={PERMISOS.VALE_DESCONTAR}
+                      fallbackRoute={ROUTES.VALES}
+                    >
+                      {withSuspense(<ValesAuditoriaPage />)}
+                    </RequirePermission>
+                  </RequireRole>
                 ),
               },
               {

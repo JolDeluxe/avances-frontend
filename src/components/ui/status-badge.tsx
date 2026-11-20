@@ -22,6 +22,7 @@ export interface StatusBadgeProps {
   estadoVale?: EstadoVale;
   className?: string;
   showIcon?: boolean;
+  label?: string;
 }
 
 /**
@@ -34,6 +35,7 @@ export function StatusBadge({
   estadoVale,
   className,
   showIcon = true,
+  label,
 }: StatusBadgeProps): ReactNode {
   let config: StatusVisualConfig | undefined;
 
@@ -69,7 +71,7 @@ export function StatusBadge({
       ) : (
         <span className={cn('w-2 h-2 rounded-full shrink-0', resolved.dot)} />
       )}
-      <span>{resolved.label}</span>
+      <span>{label ?? resolved.label}</span>
     </span>
   );
 }
@@ -80,11 +82,13 @@ export function StatusBadge({
 export function ListadoStatusBadge({
   estado,
   className,
+  label,
 }: {
   estado: EstadoListado;
   className?: string;
+  label?: string;
 }): ReactNode {
-  return <StatusBadge estadoListado={estado} className={className} />;
+  return <StatusBadge estadoListado={estado} className={className} label={label} />;
 }
 
 /**
@@ -93,11 +97,13 @@ export function ListadoStatusBadge({
 export function FrenteStatusBadge({
   estado,
   className,
+  label,
 }: {
   estado: EstadoFrenteMaterial;
   className?: string;
+  label?: string;
 }): ReactNode {
-  return <StatusBadge estadoFrente={estado} className={className} />;
+  return <StatusBadge estadoFrente={estado} className={className} label={label} />;
 }
 
 /**

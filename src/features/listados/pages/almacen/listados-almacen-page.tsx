@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useListados } from '../../hooks/use-listados';
 import { useLineasProduccion } from '../../hooks/use-lineas-produccion';
@@ -10,7 +10,7 @@ import { ListadoAccionModal, type AccionOperativaAlmacen } from '../../component
 import { ListadoBatchAccionModal, type BatchAccionOperativa } from '../../components/listado-batch-accion-modal';
 import { Button } from '@/components/ui/button';
 import { listadosApi } from '../../api/listados-api';
-import { clasificarListadosPorArea } from '../../utils/classify-listados';
+import { clasificarListadosPorArea, canOperateListadoFrente } from '../../utils/classify-listados';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import type { ListadoItem, TipoFrenteMaterial } from '../../types/listados.types';
 
@@ -32,12 +32,13 @@ function formatFecha(fechaStr: string): string {
  * - ACCESORIOS (Derecha): NO | LISTADO | Fecha Req. | Estado | Línea | DIR | IND | BOL | Acciones
  */
 export function ListadosAlmacenPage(): ReactNode {
-  const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission } = usePermissions();
   const canVer = hasPermission('listado:ver');
   const canSeparar = hasPermission('listado:separar');
   const canEntregar = hasPermission('listado:entregar');
-  const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
+  const canRetroceder = hasPermission('listado:retroceder');
   const canCancelar = hasPermission('listado:cancelar');
+  const canInteract = canSeparar || canEntregar;
 
   const {
     items,
@@ -46,24 +47,23 @@ export function ListadosAlmacenPage(): ReactNode {
     error,
     reloadListados,
     setPage,
+    highlightedIds,
+    entregandoIds,
   } = useListados({ fixedEstado: 'PENDIENTE,EN_PROCESO' });
 
   const { todasLasLineas } = useLineasProduccion();
 
   // ─── Frentes Operativos según perfil (Almacén) ─────────────────────────────
   const operativeFrentes = useMemo(() => {
-    if (isSuperAdmin || isAdmin) return null;
-    if (!user?.tipoSurtidoAlmacen || user.tipoSurtidoAlmacen === 'TODOS') return null;
-    const parts = user.tipoSurtidoAlmacen.split(',').map((p) => p.trim().toUpperCase());
-    const valid = parts.filter(
-      (p): p is TipoFrenteMaterial => p === 'DIRECTOS' || p === 'INDIRECTOS' || p === 'BOLSAS',
-    );
+    if (user?.rol === 'SUPER_ADMIN') return null;
+    const frentes: TipoFrenteMaterial[] = ['DIRECTOS', 'INDIRECTOS', 'BOLSAS'];
+    const valid = frentes.filter((f) => canOperateListadoFrente(user, f, 'almacen'));
     return valid.length > 0 ? valid : null;
-  }, [isSuperAdmin, isAdmin, user?.tipoSurtidoAlmacen]);
+  }, [user]);
 
   // ─── Desactivación / Atenuación visual de bloques por línea asignada ────────
   const { isBotaDisabled, isAccesoriosDisabled } = useMemo(() => {
-    if (isSuperAdmin || isAdmin) {
+    if (user?.rol === 'SUPER_ADMIN') {
       return { isBotaDisabled: false, isAccesoriosDisabled: false };
     }
     const lineas = user?.lineasAsignadas ?? [];
@@ -76,7 +76,7 @@ export function ListadosAlmacenPage(): ReactNode {
       isBotaDisabled: !hasBota,
       isAccesoriosDisabled: !hasAccesorios,
     };
-  }, [isSuperAdmin, isAdmin, user?.lineasAsignadas]);
+  }, [user]);
 
   // ─── Estado de modales y feedback ──────────────────────────────────────────
   const [selectedListado, setSelectedListado] = useState<ListadoItem | null>(null);
@@ -119,13 +119,35 @@ export function ListadosAlmacenPage(): ReactNode {
     tipoFrente: 'DIRECTOS',
   });
 
+  const isListadoOperable = useCallback(
+    (item: ListadoItem): boolean => {
+      const frentes = item.frentes ?? [];
+      return frentes.some((f) => {
+        if (f.estado === 'PENDIENTE') {
+          return canSeparar && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+        }
+        if (f.estado === 'SEPARADO') {
+          return canEntregar && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+        }
+        return false;
+      });
+    },
+    [user, canSeparar, canEntregar],
+  );
+
   const handleToggleSelectBota = (id: number) => {
+    if (!canInteract) return;
+    const item = botaItems.find((i) => i.id === id);
+    if (!item || !isListadoOperable(item)) return;
     setSelectedBotaIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
   const handleToggleSelectAccesorios = (id: number) => {
+    if (!canInteract) return;
+    const item = accesoriosItems.find((i) => i.id === id);
+    if (!item || !isListadoOperable(item)) return;
     setSelectedAccesoriosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -268,11 +290,27 @@ export function ListadosAlmacenPage(): ReactNode {
   // el listado desaparece de su vista para evitar confusiones.
   // IMPORTANTE: Si el listado se encuentra en animación de entrega (entregandoListadoId),
   // se conserva visible temporalmente para que parpadee en verde y se desvanezca antes de retirarse.
+  const combinedHighlightedIds = useMemo(() => {
+    const local = Array.isArray(highlightedListadoId)
+      ? highlightedListadoId
+      : highlightedListadoId
+        ? [highlightedListadoId]
+        : [];
+    return Array.from(new Set([...highlightedIds, ...local]));
+  }, [highlightedIds, highlightedListadoId]);
+
+  const combinedEntregandoIds = useMemo(() => {
+    const local = Array.isArray(entregandoListadoId)
+      ? entregandoListadoId
+      : entregandoListadoId
+        ? [entregandoListadoId]
+        : [];
+    return Array.from(new Set([...entregandoIds, ...local]));
+  }, [entregandoIds, entregandoListadoId]);
+
   const itemsPendientes = useMemo(() => {
     return items.filter((item) => {
-      const isCurrentlyEntregando = Array.isArray(entregandoListadoId)
-        ? entregandoListadoId.includes(item.id)
-        : entregandoListadoId === item.id;
+      const isCurrentlyEntregando = combinedEntregandoIds.includes(item.id);
 
       if (isCurrentlyEntregando) {
         return true;
@@ -296,7 +334,7 @@ export function ListadosAlmacenPage(): ReactNode {
       }
       return item.estado === 'PENDIENTE' || item.estado === 'EN_PROCESO';
     });
-  }, [items, operativeFrentes, entregandoListadoId]);
+  }, [items, operativeFrentes, combinedEntregandoIds]);
 
   // Clasificación dinámica de registros en BOTA y ACCESORIOS desde el catálogo del backend
   const { botaItems, accesoriosItems, noClasificados } = useMemo(() => {
@@ -320,16 +358,16 @@ export function ListadosAlmacenPage(): ReactNode {
 
     selectedBotaListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
-      if (frentes.some((f) => f.estado === 'PENDIENTE')) {
+      if (frentes.some((f) => f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canSepararCount++;
       }
-      if (frentes.some((f) => f.estado === 'SEPARADO')) {
+      if (frentes.some((f) => f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canEntregarCount++;
       }
     });
 
     return { canSepararCount, canEntregarCount };
-  }, [selectedBotaListados, operativeFrentes]);
+  }, [selectedBotaListados, operativeFrentes, user]);
 
   const accesoriosEligibles = useMemo(() => {
     const frentesToCheck = operativeFrentes ?? (['DIRECTOS', 'INDIRECTOS', 'BOLSAS'] as TipoFrenteMaterial[]);
@@ -338,16 +376,16 @@ export function ListadosAlmacenPage(): ReactNode {
 
     selectedAccesoriosListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
-      if (frentes.some((f) => f.estado === 'PENDIENTE')) {
+      if (frentes.some((f) => f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canSepararCount++;
       }
-      if (frentes.some((f) => f.estado === 'SEPARADO')) {
+      if (frentes.some((f) => f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canEntregarCount++;
       }
     });
 
     return { canSepararCount, canEntregarCount };
-  }, [selectedAccesoriosListados, operativeFrentes]);
+  }, [selectedAccesoriosListados, operativeFrentes, user]);
 
   // Handler de confirmación del modal masivo
   const handleConfirmBatchAccion = async ({
@@ -362,12 +400,12 @@ export function ListadosAlmacenPage(): ReactNode {
     const { area, accion } = batchModal;
     const selectedListados = area === 'BOTA' ? selectedBotaListados : selectedAccesoriosListados;
 
-    // Filtrar solo los que realmente son elegibles para la acción solicitada
+    // Filtrar solo los que realmente son elegibles para la acción solicitada y dentro del alcance operativo
     const listadosElegibles = selectedListados.filter((item) => {
       const f = item.frentes?.find((fr) => fr.tipoFrente === tipoFrente);
       if (!f) return false;
-      if (accion === 'separar') return f.estado === 'PENDIENTE';
-      if (accion === 'entregar') return f.estado === 'SEPARADO';
+      if (accion === 'separar') return f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+      if (accion === 'entregar') return f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
       return false;
     });
 
@@ -657,10 +695,11 @@ export function ListadosAlmacenPage(): ReactNode {
         frentesPermitidos={operativeFrentes}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
-        highlightedListadoId={highlightedListadoId}
-        entregandoListadoId={entregandoListadoId}
+        highlightedListadoId={combinedHighlightedIds}
+        entregandoListadoId={combinedEntregandoIds}
         entregandoFrente={entregandoFrente}
-        allowSelection={true}
+        allowSelection={canInteract}
+        isItemOperable={isListadoOperable}
         selectedBotaIds={selectedBotaIds}
         selectedAccesoriosIds={selectedAccesoriosIds}
         onToggleSelectBota={handleToggleSelectBota}

@@ -1,7 +1,12 @@
 import { type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { UserStatusBadge, UserRoleBadge, UserSegmentacionBadge } from './user-status-badge';
+import {
+  UserStatusBadge,
+  UserRoleBadge,
+  UserSegmentacionBadge,
+  UserValesBadge,
+} from './user-status-badge';
 import type { UsuarioItem } from '../types/users.types';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useAuth } from '@/features/auth/hooks/use-auth';
@@ -76,7 +81,7 @@ export function UserCard({
       <div className="text-xs pt-2 border-t border-border/40 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-text-muted text-[10px] uppercase font-bold tracking-wider">
-            Segmentación
+            Listados
           </span>
           <UserSegmentacionBadge
             tipoSurtidoAlmacen={user.tipoSurtidoAlmacen}
@@ -109,6 +114,17 @@ export function UserCard({
             )}
           </div>
         )}
+
+        <div className="flex items-center justify-between">
+          <span className="text-text-muted text-[10px] uppercase font-bold tracking-wider">
+            Vales
+          </span>
+          <UserValesBadge
+            areasVale={user.areasVale}
+            departamentosValeAsignados={user.departamentosValeAsignados}
+            rolCodigo={user.rol.codigo}
+          />
+        </div>
       </div>
 
       {/* Action Buttons */}

@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ValeStatusBadge } from '@/components/ui/status-badge';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { PERMISOS } from '@/config/permissions';
+import { canOperateValeItem } from '../utils/classify-vales';
 import { valesApi } from '../api/vales-api';
 import type { ValeItem } from '../types/vales.types';
 import type { TipoAccionVale } from './vale-accion-modal';
@@ -77,7 +78,7 @@ export function ValeDetailModal({
   onValeUpdated,
   allowSeparar = true,
 }: ValeDetailModalProps): ReactNode {
-  const { can, isSuperAdmin, isAdmin } = usePermissions();
+  const { can, user } = usePermissions();
 
   const [detalle, setDetalle] = useState<ValeItem | null>(null);
   const [isLoadingDetalle, setIsLoadingDetalle] = useState<boolean>(false);
@@ -133,14 +134,16 @@ export function ValeDetailModal({
 
   const data = detalle ?? vale;
 
-  // Permisos efectivos para operaciones de vales
+  // Permisos efectivos y alcance operativo sobre este vale específico
+  const canOperateThis = canOperateValeItem(user, data);
+
   const canSeparar =
-    isSuperAdmin || isAdmin ? true : Boolean(allowSeparar) && can(PERMISOS.VALE_SEPARAR);
-  const canEntregar = isSuperAdmin || isAdmin ? true : can(PERMISOS.VALE_ENTREGAR);
-  const canDescontar = isSuperAdmin || isAdmin || can(PERMISOS.VALE_DESCONTAR);
-  const canRetroceder = isSuperAdmin || isAdmin || can(PERMISOS.VALE_RETROCEDER);
+    canOperateThis && Boolean(allowSeparar) && can(PERMISOS.VALE_SEPARAR);
+  const canEntregar = canOperateThis && can(PERMISOS.VALE_ENTREGAR);
+  const canDescontar = canOperateThis && can(PERMISOS.VALE_DESCONTAR);
+  const canRetroceder = canOperateThis && can(PERMISOS.VALE_RETROCEDER);
   const canRetrocederDescuento =
-    isSuperAdmin || isAdmin || can(PERMISOS.VALE_RETROCEDER_DESCUENTO);
+    canOperateThis && can(PERMISOS.VALE_RETROCEDER_DESCUENTO);
 
   const canRollbackCurrent =
     (data.estado === 'SEPARADO' && canRetroceder) ||
@@ -148,11 +151,12 @@ export function ValeDetailModal({
     (data.estado === 'DESCONTADO' && canRetrocederDescuento);
 
   const canEdit =
-    (isSuperAdmin || isAdmin || can(PERMISOS.VALE_EDITAR)) && data.estado === 'PENDIENTE';
+    canOperateThis && can(PERMISOS.VALE_EDITAR) && data.estado === 'PENDIENTE';
 
   const canCancelarVale =
-    onTransition &&
-    (isSuperAdmin || isAdmin || can(PERMISOS.VALE_CANCELAR)) &&
+    Boolean(onTransition) &&
+    canOperateThis &&
+    can(PERMISOS.VALE_CANCELAR) &&
     (data.estado === 'PENDIENTE' || data.estado === 'SEPARADO');
 
   const handleSeparar = async () => {

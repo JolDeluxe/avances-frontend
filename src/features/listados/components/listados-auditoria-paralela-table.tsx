@@ -559,13 +559,17 @@ export function ListadosAuditoriaParalelaTable({
                           >
                             {/* Checkbox de selección individual */}
                             <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                              <input
-                                type="checkbox"
-                                aria-label={`Seleccionar listado ${dirItem.numeroListado}`}
-                                checked={isSelected}
-                                onChange={() => onToggleSelectDirectos?.(dirItem.id)}
-                                className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
-                              />
+                              {acciones?.canDescontar && puedeOperar ? (
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Seleccionar listado ${dirItem.numeroListado}`}
+                                  checked={isSelected}
+                                  onChange={() => onToggleSelectDirectos?.(dirItem.id)}
+                                  className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                                />
+                              ) : (
+                                <span className="text-text-muted/40 font-mono text-xs select-none">—</span>
+                              )}
                             </td>
                             <td
                               title={dirItem.lineaProduccion.nombre.toUpperCase()}
@@ -678,13 +682,17 @@ export function ListadosAuditoriaParalelaTable({
                           >
                             {/* Checkbox de selección individual */}
                             <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                              <input
-                                type="checkbox"
-                                aria-label={`Seleccionar listado ${indItem.numeroListado}`}
-                                checked={isSelected}
-                                onChange={() => onToggleSelectIndirectos?.(indItem.id)}
-                                className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
-                              />
+                              {acciones?.canDescontar && puedeOperar ? (
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Seleccionar listado ${indItem.numeroListado}`}
+                                  checked={isSelected}
+                                  onChange={() => onToggleSelectIndirectos?.(indItem.id)}
+                                  className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                                />
+                              ) : (
+                                <span className="text-text-muted/40 font-mono text-xs select-none">—</span>
+                              )}
                             </td>
                             <td
                               title={indItem.lineaProduccion.nombre.toUpperCase()}

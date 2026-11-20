@@ -39,6 +39,9 @@ export function MonitorPendientesPage(): ReactNode {
     isLoading,
     error,
     reloadListados,
+    highlightedIds,
+    entregandoIds,
+    descontandoIds,
   } = useListados({
     fixedEstado: 'PENDIENTE,EN_PROCESO',
     customLimit: 1000,
@@ -176,6 +179,9 @@ export function MonitorPendientesPage(): ReactNode {
   // (DIR, IND y BOL según aplique) han llegado al menos a estado ENTREGADO o DESCONTADO.
   const itemsPendientesCompletos = useMemo(() => {
     return items.filter((item) => {
+      if (descontandoIds.includes(item.id) || entregandoIds.includes(item.id)) {
+        return true;
+      }
       if (item.estado === 'CANCELADO' || item.estado === 'ENTREGADO_A_PRODUCCION' || item.estado === 'DESCONTADO') {
         return false;
       }
@@ -186,7 +192,7 @@ export function MonitorPendientesPage(): ReactNode {
       // Permanece si AL MENOS UNO de sus frentes está en PENDIENTE o SEPARADO
       return frentes.some((f) => f.estado === 'PENDIENTE' || f.estado === 'SEPARADO');
     });
-  }, [items]);
+  }, [items, descontandoIds, entregandoIds]);
 
   // Clasificación dinámica en BOTA y ACCESORIOS
   const { botaItems, accesoriosItems, noClasificados } = useMemo(() => {
@@ -300,6 +306,9 @@ export function MonitorPendientesPage(): ReactNode {
         isLoading={isLoading}
         allowSelection={false}
         hideActions={true}
+        highlightedListadoId={highlightedIds}
+        entregandoListadoId={entregandoIds}
+        descontandoListadoId={descontandoIds}
         emptyMessage="Todos los listados de producción han sido completados y entregados."
       />
     </div>

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@/components/ui/icon';
 import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
-import { classifyVales } from '../utils/classify-vales';
+import { classifyVales, canOperateValeItem } from '../utils/classify-vales';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import type { ValeItem, EstadoVale } from '../types/vales.types';
 
 /**
@@ -59,6 +60,7 @@ export interface ValesPendientesParalelaTableProps {
   onToggleAllBota?: (checked: boolean) => void;
   onToggleAllAccesorios?: (checked: boolean) => void;
   allowSelection?: boolean;
+  isItemOperable?: (vale: ValeItem) => boolean;
   acciones?: AccionesFilaVale;
   isBotaDisabled?: boolean;
   isAccesoriosDisabled?: boolean;
@@ -211,23 +213,26 @@ function MenuAccionesFila({
 
   if (!acciones) return null;
 
+  const { user } = usePermissions();
+  const canOperate = canOperateValeItem(user, row);
+
   const isCancelado = row.estado === 'CANCELADO';
   const isDescontado = row.estado === 'DESCONTADO';
   const isTerminal = isCancelado || isDescontado;
 
   const canRetroceder =
-    Boolean(acciones.canRetroceder && acciones.onRetroceder) &&
+    Boolean(acciones.canRetroceder && acciones.onRetroceder && canOperate) &&
     (row.estado === 'SEPARADO' || row.estado === 'ENTREGADO');
   const canEditar =
     Boolean(acciones.canEditar && acciones.onEditar) && !isTerminal;
   const canCancelar =
     Boolean(acciones.canCancelar && acciones.onCancelar) && !isTerminal;
   const canSeparar =
-    Boolean(acciones.canSeparar && acciones.onSeparar) && row.estado === 'PENDIENTE';
+    Boolean(acciones.canSeparar && acciones.onSeparar && canOperate) && row.estado === 'PENDIENTE';
   const canEntregar =
-    Boolean(acciones.canEntregar && acciones.onEntregar) && row.estado === 'SEPARADO';
+    Boolean(acciones.canEntregar && acciones.onEntregar && canOperate) && row.estado === 'SEPARADO';
   const canDescontar =
-    Boolean(acciones.canDescontar && acciones.onDescontar) && row.estado === 'ENTREGADO';
+    Boolean(acciones.canDescontar && acciones.onDescontar && canOperate) && row.estado === 'ENTREGADO';
 
   return (
     <div className="relative inline-block text-left">
@@ -457,6 +462,7 @@ function SeccionTablaArea({
   entregandoValeId,
   descontandoValeId,
   compact = false,
+  isItemOperable,
 }: {
   titulo: string;
   tituloClassName: string;
@@ -473,7 +479,9 @@ function SeccionTablaArea({
   entregandoValeId?: number | number[] | null;
   descontandoValeId?: number | number[] | null;
   compact?: boolean;
+  isItemOperable?: (vale: ValeItem) => boolean;
 }): ReactNode {
+  const { user } = usePermissions();
   const totalCols = (allowSelection ? 1 : 0) + 5 + (hideActions ? 0 : 1);
 
   return (
@@ -595,16 +603,32 @@ function SeccionTablaArea({
                             : 'bg-app-surface hover:bg-app-surface-muted/60'
                     } ${idx > 0 && !isNewGroup ? 'border-t border-border/60' : ''}`}
                   >
-                    {/* Checkbox de selección individual */}
+                    {/* Checkbox de selección individual (solo si es operable por el usuario y dentro de su alcance) */}
                     {allowSelection && (
                       <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                        <input
-                          type="checkbox"
-                          aria-label={`Seleccionar vale ${item.folio}`}
-                          checked={isSelected}
-                          onChange={() => onToggleSelect?.(item.id)}
-                          className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
-                        />
+                        {isItemOperable ? (
+                          isItemOperable(item) ? (
+                            <input
+                              type="checkbox"
+                              aria-label={`Seleccionar vale ${item.folio}`}
+                              checked={isSelected}
+                              onChange={() => onToggleSelect?.(item.id)}
+                              className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                            />
+                          ) : (
+                            <span className="text-text-muted/20 text-xs select-none">—</span>
+                          )
+                        ) : canOperateValeItem(user, item) && item.estado !== 'CANCELADO' && item.estado !== 'DESCONTADO' ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Seleccionar vale ${item.folio}`}
+                            checked={isSelected}
+                            onChange={() => onToggleSelect?.(item.id)}
+                            className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                          />
+                        ) : (
+                          <span className="text-text-muted/20 text-xs select-none">—</span>
+                        )}
                       </td>
                     )}
 
@@ -714,6 +738,7 @@ export function ValesPendientesParalelaTable({
   isAccesoriosDisabled = false,
   isOtroDisabled = false,
   hideActions = false,
+  isItemOperable,
   headerRight,
   highlightedValeId = null,
   entregandoValeId = null,
@@ -875,6 +900,7 @@ export function ValesPendientesParalelaTable({
               entregandoValeId={entregandoValeId}
               descontandoValeId={descontandoValeId}
               compact={hasOtro}
+              isItemOperable={isItemOperable}
             />
 
             {/* LADO DERECHO (O CENTRAL): ACCESORIOS */}
@@ -894,6 +920,7 @@ export function ValesPendientesParalelaTable({
               entregandoValeId={entregandoValeId}
               descontandoValeId={descontandoValeId}
               compact={hasOtro}
+              isItemOperable={isItemOperable}
             />
 
             {/* LADO OTRO (Solo cuando existen registros del área OTRO) */}
@@ -914,6 +941,7 @@ export function ValesPendientesParalelaTable({
                 entregandoValeId={entregandoValeId}
                 descontandoValeId={descontandoValeId}
                 compact={true}
+                isItemOperable={isItemOperable}
               />
             )}
           </div>

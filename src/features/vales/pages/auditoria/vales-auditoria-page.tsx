@@ -10,7 +10,7 @@ import { ValeFormModal } from '../../components/vale-form-modal';
 import { ValeTransitionModal, type TransitionAction } from '../../components/vale-transition-modal';
 import { ValeAccionModal, type TipoAccionVale } from '../../components/vale-accion-modal';
 import { ValeBatchAccionModal } from '../../components/vale-batch-accion-modal';
-import { classifyVales, getValesColumnDisabledFlags } from '../../utils/classify-vales';
+import { classifyVales, getValesColumnDisabledFlags, canOperateValeItem } from '../../utils/classify-vales';
 import type { ValeItem } from '../../types/vales.types';
 
 /**
@@ -30,13 +30,13 @@ function formatFecha(fechaStr: string): string {
  * - Cuando el auditor confirma el descuento (`DESCONTADO`), la fila anima y desaparece de la vista.
  */
 export function ValesAuditoriaPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission, hasAnyPermission } = usePermissions();
 
-  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:descontar']);
-  const canDescontar = isSuperAdmin || isAdmin || hasPermission('vale:descontar');
-  const canRetroceder = isSuperAdmin || isAdmin || hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
-  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
-  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
+  const canVer = hasPermission('vale:ver');
+  const canDescontar = hasPermission('vale:descontar');
+  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canEditar = hasPermission('vale:editar');
+  const canCancelar = hasPermission('vale:cancelar');
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
@@ -112,32 +112,42 @@ export function ValesAuditoriaPage(): ReactNode {
 
   // ─── Handlers de selección por bloque ─────────────────────────────────────
   const handleToggleBotaId = (id: number) => {
+    if (!canDescontar) return;
+    const vale = botaItems.find((i) => i.id === id);
+    if (!vale || !canOperateValeItem(user, vale)) return;
     setSelectedBotaIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
   const handleToggleAccesoriosId = (id: number) => {
+    if (!canDescontar) return;
+    const vale = accesoriosItems.find((i) => i.id === id);
+    if (!vale || !canOperateValeItem(user, vale)) return;
     setSelectedAccesoriosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
   const handleToggleAllBota = (checked: boolean) => {
-    if (!checked) {
+    if (!checked || !canDescontar) {
       setSelectedBotaIds([]);
       return;
     }
-    const ids = botaItems.filter((i) => i.estado === 'ENTREGADO').map((i) => i.id);
+    const ids = botaItems
+      .filter((i) => i.estado === 'ENTREGADO' && canOperateValeItem(user, i))
+      .map((i) => i.id);
     setSelectedBotaIds(ids);
   };
 
   const handleToggleAllAccesorios = (checked: boolean) => {
-    if (!checked) {
+    if (!checked || !canDescontar) {
       setSelectedAccesoriosIds([]);
       return;
     }
-    const ids = accesoriosItems.filter((i) => i.estado === 'ENTREGADO').map((i) => i.id);
+    const ids = accesoriosItems
+      .filter((i) => i.estado === 'ENTREGADO' && canOperateValeItem(user, i))
+      .map((i) => i.id);
     setSelectedAccesoriosIds(ids);
   };
 
@@ -338,7 +348,7 @@ export function ValesAuditoriaPage(): ReactNode {
         onToggleAccesoriosId={handleToggleAccesoriosId}
         onToggleAllBota={handleToggleAllBota}
         onToggleAllAccesorios={handleToggleAllAccesorios}
-        allowSelection={true}
+        allowSelection={canDescontar}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
         isOtroDisabled={isOtroDisabled}
@@ -402,9 +412,17 @@ export function ValesAuditoriaPage(): ReactNode {
         departamentosVale={departamentosVale}
         onCatalogosChanged={reloadCatalogos}
         onSuccess={(saved) => {
-          showFeedback('success', `Vale ${saved?.folio ?? ''} actualizado correctamente.`);
-          if (saved?.id) {
-            triggerHighlight(saved.id);
+          const items = Array.isArray(saved) ? saved : saved ? [saved] : [];
+          const folios = items.map((i) => i.folio).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} vales actualizados correctamente.`
+              : `Vale ${folios} actualizado correctamente.`,
+          );
+          const ids = items.map((i) => i.id);
+          if (ids.length > 0) {
+            triggerHighlight(ids);
           }
           void reload(true);
         }}

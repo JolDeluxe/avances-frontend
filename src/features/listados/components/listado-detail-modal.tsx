@@ -8,7 +8,9 @@ import { FrenteStatusBadge } from '@/components/ui/status-badge';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import { PERMISOS } from '@/config/permissions';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { cn } from '@/lib/utils/cn';
 import { listadosApi } from '../api/listados-api';
+import { canOperateListadoFrente } from '../utils/classify-listados';
 import type { ListadoItem, TipoFrenteMaterial } from '../types/listados.types';
 
 export interface ListadoDetailModalProps {
@@ -47,32 +49,35 @@ function isTimestampHistorico(isoStr?: string | null): boolean {
   }
 }
 
-function formatTimestamp(isoStr: string): string {
+const SHORT_FRENTE_STATUS_LABELS: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  SEPARADO: 'Separado',
+  ENTREGADO: 'Entregado',
+  DESCONTADO: 'Descontado',
+};
+
+function formatTimestampParts(isoStr?: string | null): { fecha: string; hora: string | null } | null {
+  if (!isoStr) return null;
   try {
     const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-
-    const dia = d.toLocaleDateString('es-MX', {
+    if (isNaN(d.getTime())) return { fecha: String(isoStr), hora: null };
+    const fecha = d.toLocaleDateString('es-MX', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
-
-    // Si viene de script histórico o campo Date puro (medianoche UTC 00:00:00), no mostrar hora artificial
     const isMidnightUtc = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
     if (isMidnightUtc) {
-      return dia;
+      return { fecha, hora: null };
     }
-
     const hora = d.toLocaleTimeString('es-MX', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
     });
-    // Evitar que 'p. m.' o 'a. m.' se parta en otra línea usando espacio no divisible
-    return `${dia} ${hora.replace(/\s+/g, '\u00A0')}`;
+    return { fecha, hora };
   } catch {
-    return isoStr;
+    return { fecha: String(isoStr), hora: null };
   }
 }
 
@@ -80,13 +85,13 @@ export function ListadoDetailModal({
   isOpen,
   onClose,
   listado,
-  onEdit,
+  onEdit: _onEdit,
   onRequestRetroceder,
-  onRequestCancelar,
+  onRequestCancelar: _onRequestCancelar,
   onListadoUpdated,
   allowSeparar = true,
 }: ListadoDetailModalProps): ReactNode {
-  const { user, can, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, can } = usePermissions();
 
   const [detalle, setDetalle] = useState<ListadoItem | null>(null);
   const [isLoadingDetalle, setIsLoadingDetalle] = useState<boolean>(false);
@@ -146,48 +151,10 @@ export function ListadoDetailModal({
 
   const data = detalle ?? listado;
 
-  // Verificación de si todos los frentes están completos en DESCONTADO
-  const frentesActuales = data.frentes ?? [];
-  const todosFrentesDescontados =
-    frentesActuales.length > 0 &&
-    frentesActuales.every((f) => f.estado === 'DESCONTADO');
-
-  // ADMIN y SUPER_ADMIN pueden editar siempre que no estén todos los frentes descontados ni cancelado/descontado
-  const canEdit = (isSuperAdmin || isAdmin)
-    ? (!todosFrentesDescontados && (data.estado as string) !== 'CANCELADO' && (data.estado as string) !== 'DESCONTADO')
-    : data.estado === 'PENDIENTE';
-
-  // ADMIN y SUPER_ADMIN pueden cancelar siempre que no estén todos los frentes descontados ni cancelado/descontado
-  const canCancelarListado =
-    onRequestCancelar &&
-    (isSuperAdmin || isAdmin || can(PERMISOS.LISTADO_CANCELAR)) &&
-    (data.estado as string) !== 'CANCELADO' &&
-    (data.estado as string) !== 'DESCONTADO' &&
-    !todosFrentesDescontados;
-
-  // Permisos efectivos para operaciones de listados
-  // ADMIN y SUPER_ADMIN siempre pueden operar cualquier frente (Separar, Entregar, Descontar, Retroceder)
-  const canSeparar = (isSuperAdmin || isAdmin) ? true : (Boolean(allowSeparar) && can(PERMISOS.LISTADO_SEPARAR));
-  const canEntregar = (isSuperAdmin || isAdmin) ? true : can(PERMISOS.LISTADO_ENTREGAR);
-  const canRetroceder = (isSuperAdmin || isAdmin) || can(PERMISOS.LISTADO_RETROCEDER);
-  const canDescontar = (isSuperAdmin || isAdmin) || can(PERMISOS.LISTADO_DESCONTAR);
-
-  // Validador de asignación operativa para el usuario autenticado
-  const puedeOperarFrente = (tipoFrente: TipoFrenteMaterial): boolean => {
-    if (isSuperAdmin || isAdmin) return true;
-    const rol = user?.rol?.toUpperCase();
-    if (rol === 'ALMACENISTA') {
-      if (!user?.tipoSurtidoAlmacen) return true;
-      const frentes = user.tipoSurtidoAlmacen.split(',').map((f) => f.trim().toUpperCase());
-      return frentes.includes('TODOS') || frentes.includes(tipoFrente);
-    }
-    if (rol === 'AUDITOR') {
-      if (!user?.tipoMaterialAuditor) return true;
-      const frentes = user.tipoMaterialAuditor.split(',').map((f) => f.trim().toUpperCase());
-      return frentes.includes('TODOS') || frentes.includes(tipoFrente);
-    }
-    return false;
-  };
+  const canSeparar = Boolean(allowSeparar) && can(PERMISOS.LISTADO_SEPARAR);
+  const canEntregar = can(PERMISOS.LISTADO_ENTREGAR);
+  const canRetroceder = can(PERMISOS.LISTADO_RETROCEDER);
+  const canDescontar = can(PERMISOS.LISTADO_DESCONTAR);
 
   const handleSepararFrente = async (tipoFrente: TipoFrenteMaterial) => {
     setOperatingFrente(tipoFrente);
@@ -274,26 +241,15 @@ export function ListadoDetailModal({
   };
 
   const frentes = data.frentes ?? [];
-  const frentesVisibles = (() => {
-    if (isSuperAdmin || isAdmin) return frentes;
-    const rol = user?.rol?.toUpperCase();
-    if (rol === 'ALMACENISTA') {
-      if (!user?.tipoSurtidoAlmacen) return frentes;
-      const permitidos = user.tipoSurtidoAlmacen.split(',').map((f) => f.trim().toUpperCase());
-      if (permitidos.includes('TODOS')) return frentes;
-      return frentes.filter((f) => permitidos.includes(f.tipoFrente));
-    }
-    if (rol === 'AUDITOR') {
-      if (!user?.tipoMaterialAuditor) return frentes;
-      const permitidos = user.tipoMaterialAuditor.split(',').map((f) => f.trim().toUpperCase());
-      if (permitidos.includes('TODOS')) return frentes;
-      return frentes.filter((f) => permitidos.includes(f.tipoFrente));
-    }
-    return frentes;
-  })();
+  const frentesVisibles = frentes;
+  const isThreeColumns = frentesVisibles.length >= 3;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl sm:max-w-3xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      className={isThreeColumns ? 'max-w-2xl md:max-w-4xl xl:max-w-5xl' : 'max-w-2xl sm:max-w-3xl'}
+    >
       <ModalHeader title="Detalle del Listado" onClose={onClose} />
       <ModalBody className="space-y-4 p-5 sm:p-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
         {/* ─── Encabezado Limpio del Listado ─────────────────────────────── */}
@@ -365,7 +321,7 @@ export function ListadoDetailModal({
           </div>
 
           {isLoadingDetalle ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+            <div className={`grid grid-cols-1 ${frentesVisibles.length >= 3 ? 'md:grid-cols-3' : 'sm:grid-cols-2'} gap-3 py-2`}>
               <div className="p-4 rounded-xl border border-border bg-app-surface space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-border/50">
                   <Skeleton className="h-4 w-28" />
@@ -414,11 +370,21 @@ export function ListadoDetailModal({
               No hay materiales asignados para mostrar.
             </div>
           ) : (
-            <div className={`grid grid-cols-1 ${frentesVisibles.length === 1 ? 'max-w-md mx-auto w-full' : frentesVisibles.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
+            <div
+              className={cn(
+                'grid grid-cols-1 gap-3',
+                frentesVisibles.length === 1 && 'max-w-md mx-auto w-full',
+                frentesVisibles.length === 2 && 'sm:grid-cols-2',
+                frentesVisibles.length >= 3 && 'md:grid-cols-3',
+              )}
+            >
               {frentesVisibles.map((frente) => {
                 const configTipo = TIPO_FRENTE_CONFIG[frente.tipoFrente];
                 const isOperating = operatingFrente === frente.tipoFrente;
-                const userCanOperateThis = puedeOperarFrente(frente.tipoFrente);
+                const canUserOperateSeparar = canSeparar && canOperateListadoFrente(user, frente.tipoFrente, 'almacen');
+                const canUserOperateEntregar = canEntregar && canOperateListadoFrente(user, frente.tipoFrente, 'almacen');
+                const canUserOperateDescontar = canDescontar && canOperateListadoFrente(user, frente.tipoFrente, 'auditoria');
+                const canUserOperateRetroceder = canRetroceder && canOperateListadoFrente(user, frente.tipoFrente, 'almacen');
 
                 return (
                   <div
@@ -438,11 +404,15 @@ export function ListadoDetailModal({
                       <span className="font-extrabold text-xs sm:text-sm text-text-primary truncate">
                         {configTipo?.nombre ?? frente.tipoFrente}
                       </span>
-                      <FrenteStatusBadge estado={frente.estado} />
+                      <FrenteStatusBadge
+                        estado={frente.estado}
+                        label={SHORT_FRENTE_STATUS_LABELS[frente.estado] ?? frente.estado}
+                        className="shrink-0 text-[11px] px-2 py-0.5"
+                      />
                     </div>
 
                     {/* Trazabilidad: 3 columnas optimizadas para que fecha y hora se lean completas sin cortarse */}
-                    <div className="grid grid-cols-3 gap-2 py-2 px-2.5 rounded-lg bg-app-surface-muted/60 border border-border/50 text-[11px]">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 py-2 px-2 sm:px-2.5 rounded-lg bg-app-surface-muted/60 border border-border/50 text-[11px]">
                       {/* 1. SEPARADO (Naranja cuando es el estado actual) */}
                       <div className="min-w-0 flex flex-col">
                         <span
@@ -454,43 +424,55 @@ export function ListadoDetailModal({
                         >
                           Separado
                         </span>
-                        {frente.fechaSeparado ? (
-                          <div
-                            title={`${formatTimestamp(frente.fechaSeparado)}${
-                              frente.separadoPor && !isTimestampHistorico(frente.fechaSeparado)
-                                ? ` - ${frente.separadoPor.nombre || frente.separadoPor.usuario}`
-                                : ''
-                            }`}
-                          >
-                            <span
-                              className={`text-[10px] leading-tight block ${
-                                frente.estado === 'SEPARADO'
-                                  ? 'font-bold text-amber-700 dark:text-amber-300'
-                                  : 'font-semibold text-text-primary'
-                              }`}
-                            >
-                              {formatTimestamp(frente.fechaSeparado)}
-                            </span>
-                            {frente.separadoPor && !isTimestampHistorico(frente.fechaSeparado) && (
+                        {(() => {
+                          const parts = formatTimestampParts(frente.fechaSeparado);
+                          if (!parts) {
+                            return <span className="text-text-muted/40 font-bold text-[10px] block">—</span>;
+                          }
+                          const userLabel = frente.separadoPor && !isTimestampHistorico(frente.fechaSeparado)
+                            ? (frente.separadoPor.nombre || frente.separadoPor.usuario)
+                            : null;
+                          return (
+                            <div title={`${parts.fecha}${parts.hora ? ` ${parts.hora}` : ''}${userLabel ? ` - ${userLabel}` : ''}`}>
                               <span
-                                className={`text-[9px] truncate block mt-0.5 ${
+                                className={`text-[10px] leading-tight block ${
                                   frente.estado === 'SEPARADO'
-                                    ? 'text-amber-700/80 dark:text-amber-400/80'
-                                    : 'text-text-muted'
+                                    ? 'font-bold text-amber-700 dark:text-amber-300'
+                                    : 'font-semibold text-text-primary'
                                 }`}
                               >
-                                {frente.separadoPor.nombre || frente.separadoPor.usuario}
+                                {parts.fecha}
                               </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-text-muted/40 font-bold text-[10px] block">—</span>
-                        )}
+                              {parts.hora && (
+                                <span
+                                  className={`text-[9px] leading-tight block mt-0.5 ${
+                                    frente.estado === 'SEPARADO'
+                                      ? 'text-amber-700/80 dark:text-amber-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {parts.hora}
+                                </span>
+                              )}
+                              {userLabel && (
+                                <span
+                                  className={`text-[9px] truncate block mt-0.5 ${
+                                    frente.estado === 'SEPARADO'
+                                      ? 'text-amber-700/80 dark:text-amber-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {userLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* 2. ENTREGADO (Verde cuando es el estado actual) */}
                       <div
-                        className={`min-w-0 border-l pl-2 flex flex-col ${
+                        className={`min-w-0 border-l pl-1.5 sm:pl-2 flex flex-col ${
                           frente.estado === 'ENTREGADO' ? 'border-emerald-200 dark:border-emerald-800/50' : 'border-border/50'
                         }`}
                       >
@@ -503,43 +485,55 @@ export function ListadoDetailModal({
                         >
                           Entregado
                         </span>
-                        {frente.fechaEntregado ? (
-                          <div
-                            title={`${formatTimestamp(frente.fechaEntregado)}${
-                              frente.entregadoPor && !isTimestampHistorico(frente.fechaEntregado)
-                                ? ` - ${frente.entregadoPor.nombre || frente.entregadoPor.usuario}`
-                                : ''
-                            }`}
-                          >
-                            <span
-                              className={`text-[10px] leading-tight block ${
-                                frente.estado === 'ENTREGADO'
-                                  ? 'font-bold text-emerald-700 dark:text-emerald-300'
-                                  : 'font-semibold text-text-primary'
-                              }`}
-                            >
-                              {formatTimestamp(frente.fechaEntregado)}
-                            </span>
-                            {frente.entregadoPor && !isTimestampHistorico(frente.fechaEntregado) && (
+                        {(() => {
+                          const parts = formatTimestampParts(frente.fechaEntregado);
+                          if (!parts) {
+                            return <span className="text-text-muted/40 font-bold text-[10px] block">—</span>;
+                          }
+                          const userLabel = frente.entregadoPor && !isTimestampHistorico(frente.fechaEntregado)
+                            ? (frente.entregadoPor.nombre || frente.entregadoPor.usuario)
+                            : null;
+                          return (
+                            <div title={`${parts.fecha}${parts.hora ? ` ${parts.hora}` : ''}${userLabel ? ` - ${userLabel}` : ''}`}>
                               <span
-                                className={`text-[9px] truncate block mt-0.5 ${
+                                className={`text-[10px] leading-tight block ${
                                   frente.estado === 'ENTREGADO'
-                                    ? 'text-emerald-700/80 dark:text-emerald-400/80'
-                                    : 'text-text-muted'
+                                    ? 'font-bold text-emerald-700 dark:text-emerald-300'
+                                    : 'font-semibold text-text-primary'
                                 }`}
                               >
-                                {frente.entregadoPor.nombre || frente.entregadoPor.usuario}
+                                {parts.fecha}
                               </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-text-muted/40 font-bold text-[10px] block">—</span>
-                        )}
+                              {parts.hora && (
+                                <span
+                                  className={`text-[9px] leading-tight block mt-0.5 ${
+                                    frente.estado === 'ENTREGADO'
+                                      ? 'text-emerald-700/80 dark:text-emerald-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {parts.hora}
+                                </span>
+                              )}
+                              {userLabel && (
+                                <span
+                                  className={`text-[9px] truncate block mt-0.5 ${
+                                    frente.estado === 'ENTREGADO'
+                                      ? 'text-emerald-700/80 dark:text-emerald-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {userLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* 3. DESCONTADO (Morado cuando es el estado actual) */}
                       <div
-                        className={`min-w-0 border-l pl-2 flex flex-col ${
+                        className={`min-w-0 border-l pl-1.5 sm:pl-2 flex flex-col ${
                           frente.estado === 'DESCONTADO' ? 'border-purple-200 dark:border-purple-800/50' : 'border-border/50'
                         }`}
                       >
@@ -552,38 +546,50 @@ export function ListadoDetailModal({
                         >
                           Descontado
                         </span>
-                        {frente.fechaDescontado ? (
-                          <div
-                            title={`${formatTimestamp(frente.fechaDescontado)}${
-                              frente.descontadoPor && !isTimestampHistorico(frente.fechaDescontado)
-                                ? ` - ${frente.descontadoPor.nombre || frente.descontadoPor.usuario}`
-                                : ''
-                            }`}
-                          >
-                            <span
-                              className={`text-[10px] leading-tight block ${
-                                frente.estado === 'DESCONTADO'
-                                  ? 'font-bold text-purple-700 dark:text-purple-300'
-                                  : 'font-semibold text-text-primary'
-                              }`}
-                            >
-                              {formatTimestamp(frente.fechaDescontado)}
-                            </span>
-                            {frente.descontadoPor && !isTimestampHistorico(frente.fechaDescontado) && (
+                        {(() => {
+                          const parts = formatTimestampParts(frente.fechaDescontado);
+                          if (!parts) {
+                            return <span className="text-text-muted/40 font-bold text-[10px] block">—</span>;
+                          }
+                          const userLabel = frente.descontadoPor && !isTimestampHistorico(frente.fechaDescontado)
+                            ? (frente.descontadoPor.nombre || frente.descontadoPor.usuario)
+                            : null;
+                          return (
+                            <div title={`${parts.fecha}${parts.hora ? ` ${parts.hora}` : ''}${userLabel ? ` - ${userLabel}` : ''}`}>
                               <span
-                                className={`text-[9px] truncate block mt-0.5 ${
+                                className={`text-[10px] leading-tight block ${
                                   frente.estado === 'DESCONTADO'
-                                    ? 'text-purple-600/80 dark:text-purple-400/80'
-                                    : 'text-text-muted'
+                                    ? 'font-bold text-purple-700 dark:text-purple-300'
+                                    : 'font-semibold text-text-primary'
                                 }`}
                               >
-                                {frente.descontadoPor.nombre || frente.descontadoPor.usuario}
+                                {parts.fecha}
                               </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-text-muted/40 font-bold text-[10px] block">—</span>
-                        )}
+                              {parts.hora && (
+                                <span
+                                  className={`text-[9px] leading-tight block mt-0.5 ${
+                                    frente.estado === 'DESCONTADO'
+                                      ? 'text-purple-600/80 dark:text-purple-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {parts.hora}
+                                </span>
+                              )}
+                              {userLabel && (
+                                <span
+                                  className={`text-[9px] truncate block mt-0.5 ${
+                                    frente.estado === 'DESCONTADO'
+                                      ? 'text-purple-600/80 dark:text-purple-400/80'
+                                      : 'text-text-muted'
+                                  }`}
+                                >
+                                  {userLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -597,7 +603,7 @@ export function ListadoDetailModal({
                       ) : (
                         <>
                           {/* SEPARAR */}
-                          {frente.estado === 'PENDIENTE' && canSeparar && (
+                          {frente.estado === 'PENDIENTE' && canUserOperateSeparar && (
                             confirmInlineAction?.tipoFrente === frente.tipoFrente &&
                             confirmInlineAction.accion === 'separar' ? (
                               <div className="flex items-center gap-1.5">
@@ -624,14 +630,13 @@ export function ListadoDetailModal({
                             ) : (
                               <button
                                 type="button"
-                                disabled={!userCanOperateThis}
                                 onClick={() =>
                                   setConfirmInlineAction({
                                     tipoFrente: frente.tipoFrente,
                                     accion: 'separar',
                                   })
                                 }
-                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs transition-colors cursor-pointer"
+                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white shadow-xs transition-colors cursor-pointer"
                               >
                                 <span>Separar</span>
                                 <Icon name="arrow_forward" size="xs" />
@@ -640,7 +645,7 @@ export function ListadoDetailModal({
                           )}
 
                           {/* ENTREGAR A PRODUCCIÓN */}
-                          {frente.estado === 'SEPARADO' && canEntregar && (
+                          {frente.estado === 'SEPARADO' && canUserOperateEntregar && (
                             confirmInlineAction?.tipoFrente === frente.tipoFrente &&
                             confirmInlineAction.accion === 'entregar' ? (
                               <div className="flex items-center gap-1.5">
@@ -667,14 +672,13 @@ export function ListadoDetailModal({
                             ) : (
                               <button
                                 type="button"
-                                disabled={!userCanOperateThis}
                                 onClick={() =>
                                   setConfirmInlineAction({
                                     tipoFrente: frente.tipoFrente,
                                     accion: 'entregar',
                                   })
                                 }
-                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs transition-colors cursor-pointer"
+                                className="w-full text-xs h-8 inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-xs transition-colors cursor-pointer"
                               >
                                 <span>Entregar a Prod.</span>
                                 <Icon name="arrow_forward" size="xs" />
@@ -683,7 +687,7 @@ export function ListadoDetailModal({
                           )}
 
                           {/* DESCONTAR EN SISTEMA */}
-                          {frente.estado === 'ENTREGADO' && canDescontar && (
+                          {frente.estado === 'ENTREGADO' && canUserOperateDescontar && (
                             confirmInlineAction?.tipoFrente === frente.tipoFrente &&
                             confirmInlineAction.accion === 'descontar' ? (
                               <div className="flex items-center gap-1.5">
@@ -725,7 +729,7 @@ export function ListadoDetailModal({
                           )}
 
                           {(frente.estado === 'SEPARADO' || frente.estado === 'ENTREGADO') &&
-                            canRetroceder && (
+                            canUserOperateRetroceder && (
                               <button
                                 type="button"
                                 onClick={() => handleRetrocederFrente(frente.tipoFrente)}
@@ -751,35 +755,7 @@ export function ListadoDetailModal({
           <Button type="button" variant="cancelar" onClick={onClose} className="h-9 text-xs">
             Cerrar
           </Button>
-          {canCancelarListado && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onClose();
-                onRequestCancelar?.(data);
-              }}
-              className="h-9 text-xs text-danger border-danger/40 hover:bg-danger/10 hover:border-danger/60"
-            >
-              <Icon name="block" size="xs" className="mr-1.5" />
-              Cancelar Listado
-            </Button>
-          )}
         </div>
-        {canEdit && onEdit && (
-          <Button
-            type="button"
-            variant="accion"
-            onClick={() => {
-              onClose();
-              onEdit(data);
-            }}
-            className="h-9 text-xs"
-          >
-            <Icon name="edit" size="xs" className="mr-1.5" />
-            Editar Listado
-          </Button>
-        )}
       </ModalFooter>
     </Modal>
   );

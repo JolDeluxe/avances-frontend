@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useListados } from '../../hooks/use-listados';
 import { useLineasProduccion } from '../../hooks/use-lineas-produccion';
@@ -11,7 +11,7 @@ import { ListadoAccionModal, type AccionOperativaAlmacen } from '../../component
 import { ListadoBatchAccionModal, type BatchAccionOperativa } from '../../components/listado-batch-accion-modal';
 import { Button } from '@/components/ui/button';
 import { listadosApi } from '../../api/listados-api';
-import { clasificarListadosPorArea } from '../../utils/classify-listados';
+import { clasificarListadosPorArea, canOperateListadoFrente } from '../../utils/classify-listados';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import type { ListadoItem, TipoFrenteMaterial } from '../../types/listados.types';
 
@@ -33,16 +33,18 @@ function formatFecha(fechaStr: string): string {
  * - ACCESORIOS (Derecha): NO | LISTADO | Fecha Req. | Estado | Línea | DIR | IND | BOL | Acciones
  */
 export function ListadosPendientesPage(): ReactNode {
-  const { hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission } = usePermissions();
   const canVer = hasPermission('listado:ver');
 
-  // En la vista general de PENDIENTES solo pueden operar/seleccionar ADMIN y SUPER_ADMIN
-  const canInteract = isSuperAdmin || isAdmin;
-  const canSeparar = canInteract && hasPermission('listado:separar');
-  const canEntregar = canInteract && hasPermission('listado:entregar');
-  const canDescontar = canInteract && hasPermission('listado:descontar');
-  const canRetroceder = canInteract && hasPermission('listado:retroceder');
-  const canCancelar = canInteract && hasPermission('listado:cancelar');
+  // Permisos efectivos para operaciones de piso
+  const canSeparar = hasPermission('listado:separar');
+  const canEntregar = hasPermission('listado:entregar');
+  const canDescontar = hasPermission('listado:descontar');
+  const canRetroceder = hasPermission('listado:retroceder');
+  const canCancelar = hasPermission('listado:cancelar');
+  const canEditar = hasPermission('listado:editar');
+
+  const canInteract = canSeparar || canEntregar || canDescontar;
 
   const {
     items,
@@ -51,6 +53,10 @@ export function ListadosPendientesPage(): ReactNode {
     error,
     reloadListados,
     setPage,
+    highlightedIds,
+    entregandoIds,
+    descontandoIds,
+    triggerHighlight: streamTriggerHighlight,
   } = useListados({
     fixedEstado: 'PENDIENTE,EN_PROCESO,SEPARADO,ENTREGADO_A_PRODUCCION',
     modoGlobal: true,
@@ -106,8 +112,30 @@ export function ListadosPendientesPage(): ReactNode {
     tipoFrente: 'DIRECTOS',
   });
 
+  // Verificador estricto de si un listado es operable por el usuario según su estado y alcance
+  const isListadoOperable = useCallback(
+    (item: ListadoItem): boolean => {
+      const frentes = item.frentes ?? [];
+      return frentes.some((f) => {
+        if (f.estado === 'PENDIENTE') {
+          return canSeparar && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+        }
+        if (f.estado === 'SEPARADO') {
+          return canEntregar && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+        }
+        if (f.estado === 'ENTREGADO') {
+          return canDescontar && canOperateListadoFrente(user, f.tipoFrente, 'auditoria');
+        }
+        return false;
+      });
+    },
+    [user, canSeparar, canEntregar, canDescontar],
+  );
+
   const handleToggleSelectBota = (id: number) => {
     if (!canInteract) return;
+    const item = botaItems.find((i) => i.id === id);
+    if (!item || !isListadoOperable(item)) return;
     setSelectedBotaIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -115,6 +143,8 @@ export function ListadosPendientesPage(): ReactNode {
 
   const handleToggleSelectAccesorios = (id: number) => {
     if (!canInteract) return;
+    const item = accesoriosItems.find((i) => i.id === id);
+    if (!item || !isListadoOperable(item)) return;
     setSelectedAccesoriosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -288,14 +318,37 @@ export function ListadosPendientesPage(): ReactNode {
   // Mientras falte alguno por separar, entregar o descontar, permanece en la lista.
   // Si el listado está en proceso de animación (descontando o entregando), se retiene
   // para permitir que se reproduzca el destello morado o verde antes de desaparecer.
+  const combinedHighlightedIds = useMemo(() => {
+    const local = Array.isArray(highlightedListadoId)
+      ? highlightedListadoId
+      : highlightedListadoId
+        ? [highlightedListadoId]
+        : [];
+    return Array.from(new Set([...highlightedIds, ...local]));
+  }, [highlightedIds, highlightedListadoId]);
+
+  const combinedEntregandoIds = useMemo(() => {
+    const local = Array.isArray(entregandoListadoId)
+      ? entregandoListadoId
+      : entregandoListadoId
+        ? [entregandoListadoId]
+        : [];
+    return Array.from(new Set([...entregandoIds, ...local]));
+  }, [entregandoIds, entregandoListadoId]);
+
+  const combinedDescontandoIds = useMemo(() => {
+    const local = Array.isArray(descontandoListadoId)
+      ? descontandoListadoId
+      : descontandoListadoId
+        ? [descontandoListadoId]
+        : [];
+    return Array.from(new Set([...descontandoIds, ...local]));
+  }, [descontandoIds, descontandoListadoId]);
+
   const itemsPendientes = useMemo(() => {
     return items.filter((item) => {
-      const isCurrentlyDescontando = Array.isArray(descontandoListadoId)
-        ? descontandoListadoId.includes(item.id)
-        : descontandoListadoId === item.id;
-      const isCurrentlyEntregando = Array.isArray(entregandoListadoId)
-        ? entregandoListadoId.includes(item.id)
-        : entregandoListadoId === item.id;
+      const isCurrentlyDescontando = combinedDescontandoIds.includes(item.id);
+      const isCurrentlyEntregando = combinedEntregandoIds.includes(item.id);
 
       if (isCurrentlyDescontando || isCurrentlyEntregando) {
         return true;
@@ -310,7 +363,7 @@ export function ListadosPendientesPage(): ReactNode {
       }
       return (item.estado as string) !== 'DESCONTADO' && (item.estado as string) !== 'CANCELADO';
     });
-  }, [items, descontandoListadoId, entregandoListadoId]);
+  }, [items, combinedDescontandoIds, combinedEntregandoIds]);
 
   // Clasificación dinámica de registros en BOTA y ACCESORIOS desde el catálogo del backend
   const { botaItems, accesoriosItems, noClasificados } = useMemo(() => {
@@ -335,19 +388,19 @@ export function ListadosPendientesPage(): ReactNode {
 
     selectedBotaListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
-      if (frentes.some((f) => f.estado === 'PENDIENTE')) {
+      if (frentes.some((f) => f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canSepararCount++;
       }
-      if (frentes.some((f) => f.estado === 'SEPARADO')) {
+      if (frentes.some((f) => f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canEntregarCount++;
       }
-      if (frentes.some((f) => f.estado === 'ENTREGADO')) {
+      if (frentes.some((f) => f.estado === 'ENTREGADO' && canOperateListadoFrente(user, f.tipoFrente, 'auditoria'))) {
         canDescontarCount++;
       }
     });
 
     return { canSepararCount, canEntregarCount, canDescontarCount };
-  }, [selectedBotaListados]);
+  }, [selectedBotaListados, user]);
 
   const accesoriosEligibles = useMemo(() => {
     const frentesToCheck = ['DIRECTOS', 'INDIRECTOS', 'BOLSAS'] as TipoFrenteMaterial[];
@@ -357,19 +410,19 @@ export function ListadosPendientesPage(): ReactNode {
 
     selectedAccesoriosListados.forEach((item) => {
       const frentes = (item.frentes ?? []).filter((f) => frentesToCheck.includes(f.tipoFrente));
-      if (frentes.some((f) => f.estado === 'PENDIENTE')) {
+      if (frentes.some((f) => f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canSepararCount++;
       }
-      if (frentes.some((f) => f.estado === 'SEPARADO')) {
+      if (frentes.some((f) => f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'))) {
         canEntregarCount++;
       }
-      if (frentes.some((f) => f.estado === 'ENTREGADO')) {
+      if (frentes.some((f) => f.estado === 'ENTREGADO' && canOperateListadoFrente(user, f.tipoFrente, 'auditoria'))) {
         canDescontarCount++;
       }
     });
 
     return { canSepararCount, canEntregarCount, canDescontarCount };
-  }, [selectedAccesoriosListados]);
+  }, [selectedAccesoriosListados, user]);
 
   // Handler de confirmación del modal masivo
   const handleConfirmBatchAccion = async ({
@@ -385,13 +438,13 @@ export function ListadosPendientesPage(): ReactNode {
     const { area, accion } = batchModal;
     const selectedListados = area === 'BOTA' ? selectedBotaListados : selectedAccesoriosListados;
 
-    // Filtrar solo los que realmente son elegibles para la acción solicitada
+    // Filtrar solo los que realmente son elegibles para la acción solicitada y dentro del alcance operativo
     const listadosElegibles = selectedListados.filter((item) => {
       const f = item.frentes?.find((fr) => fr.tipoFrente === tipoFrente);
       if (!f) return false;
-      if (accion === 'separar') return f.estado === 'PENDIENTE';
-      if (accion === 'entregar') return f.estado === 'SEPARADO';
-      if (accion === 'descontar') return f.estado === 'ENTREGADO';
+      if (accion === 'separar') return f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+      if (accion === 'entregar') return f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+      if (accion === 'descontar') return f.estado === 'ENTREGADO' && canOperateListadoFrente(user, f.tipoFrente, 'auditoria');
       return false;
     });
 
@@ -720,13 +773,13 @@ export function ListadosPendientesPage(): ReactNode {
         frentesPermitidos={null}
         isBotaDisabled={false}
         isAccesoriosDisabled={false}
-        highlightedListadoId={highlightedListadoId}
-        entregandoListadoId={entregandoListadoId}
+        highlightedListadoId={combinedHighlightedIds}
+        entregandoListadoId={combinedEntregandoIds}
         entregandoFrente={entregandoFrente}
-        descontandoListadoId={descontandoListadoId}
+        descontandoListadoId={combinedDescontandoIds}
         descontandoFrente={descontandoFrente}
         allowSelection={canInteract}
-        hideActions={!canInteract}
+        isItemOperable={isListadoOperable}
         selectedBotaIds={selectedBotaIds}
         selectedAccesoriosIds={selectedAccesoriosIds}
         onToggleSelectBota={handleToggleSelectBota}
@@ -750,7 +803,7 @@ export function ListadosPendientesPage(): ReactNode {
           canSeparar,
           canEntregar,
           canDescontar,
-          canEditar: canInteract,
+          canEditar,
           canRetroceder,
           canCancelar,
         }}
@@ -810,9 +863,17 @@ export function ListadosPendientesPage(): ReactNode {
         listado={selectedListado}
         departamentos={departamentos}
         onSuccess={(updated) => {
-          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
-          if (updated?.id) {
-            triggerHighlight(updated.id);
+          const savedItems = Array.isArray(updated) ? updated : updated ? [updated] : [];
+          const numeros = savedItems.map((i) => i.numeroListado).join(', ');
+          showFeedback(
+            'success',
+            savedItems.length > 1
+              ? `${savedItems.length} listados registrados correctamente.`
+              : `Listado ${numeros} registrado correctamente.`,
+          );
+          const ids = savedItems.map((i) => i.id);
+          if (ids.length > 0) {
+            streamTriggerHighlight(ids);
           }
           reloadListados();
         }}

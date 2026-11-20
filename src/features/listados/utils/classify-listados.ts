@@ -1,4 +1,5 @@
-import type { ListadoItem, LineaProduccionConEstado, AreaProduccion } from '../types/listados.types';
+import type { ListadoItem, LineaProduccionConEstado, AreaProduccion, TipoFrenteMaterial } from '../types/listados.types';
+import type { UsuarioAuth } from '@/features/auth/types/auth.types';
 
 export interface ClasificacionListadosResult {
   botaItems: ListadoItem[];
@@ -64,4 +65,47 @@ export function clasificarListadosPorArea(
   });
 
   return { botaItems, accesoriosItems, noClasificados };
+}
+
+export type TipoOperacionFrente = 'almacen' | 'auditoria';
+
+/**
+ * Evalúa si el usuario autenticado tiene alcance operativo sobre un frente de listado.
+ * Réplica idéntica de ListadosLifecycleService en el backend.
+ * Política: Deny-by-default. Sin excepciones de rol para ADMIN.
+ */
+export function canOperateListadoFrente(
+  user: UsuarioAuth | null | undefined,
+  tipoFrente: TipoFrenteMaterial,
+  operacion: TipoOperacionFrente,
+): boolean {
+  if (!user || !user.id || !tipoFrente) {
+    return false; // Información no disponible -> Deny-by-default
+  }
+
+  // 1. Alcance Ilimitado (Únicamente SUPER_ADMIN)
+  if (user.rol === 'SUPER_ADMIN') {
+    return true;
+  }
+
+  // 2. Extraer asignación según dominio de la operación
+  const rawAsignacion =
+    operacion === 'auditoria' ? user.tipoMaterialAuditor : user.tipoSurtidoAlmacen;
+
+  // Si no tiene asignación explícita -> Deny-by-default (nunca ilimitado)
+  if (!rawAsignacion || rawAsignacion.trim() === '') {
+    return false;
+  }
+
+  const permitidos = rawAsignacion
+    .split(',')
+    .map((s) => s.trim().toUpperCase());
+
+  // 3. Alcance explícitamente ilimitado para esta operación ("TODOS")
+  if (permitidos.includes('TODOS')) {
+    return true;
+  }
+
+  // 4. Alcance restringido por frente específico
+  return permitidos.includes(tipoFrente.toUpperCase());
 }

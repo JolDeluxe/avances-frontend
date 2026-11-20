@@ -42,33 +42,40 @@ const ALL_TABS: Record<string, TabItem> = {
 };
 
 /**
- * Orden y visibilidad de tabs según el rol (idéntico a ListadosNav):
- * - ALMACENISTA: ALMACEN | PENDIENTES
- * - REGISTRADOR: AGREGAR + | PENDIENTES | (Historial separado)
- * - AUDITOR: AUDITORIA | PENDIENTES | (Historial separado)
- * - ADMIN: AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
- * - SUPER_ADMIN: ALMACEN | AGREGAR + | AUDITORIA | PENDIENTES | (Historial separado)
- * - SUPERVISOR: PENDIENTES | (Historial separado)
- */
-const ROLE_TABS_CONFIG: Record<string, string[]> = {
-  ALMACENISTA: ['almacen', 'pendientes'],
-  REGISTRADOR: ['administracion', 'pendientes', 'historial'],
-  AUDITOR: ['auditoria', 'pendientes', 'historial'],
-  ADMIN: ['administracion', 'auditoria', 'pendientes', 'historial'],
-  SUPER_ADMIN: ['almacen', 'administracion', 'auditoria', 'pendientes', 'historial'],
-  SUPERVISOR: ['pendientes', 'historial'],
-};
-
-/**
  * Barra de navegación interna del módulo Vales.
  * Usa NavLink para que el tab activo se marque automáticamente.
+ * Filtra los tabs según los permisos efectivos del usuario.
  * Estilos, tipografía, paddings y comportamiento exactamente idénticos a ListadosNav.
  */
 export function ValesNav({ className }: { className?: string }): ReactNode {
-  const { rol, isSuperAdmin } = usePermissions();
+  const { hasPermission, rol, isAdmin } = usePermissions();
 
-  const roleKey = isSuperAdmin ? 'SUPER_ADMIN' : (rol || '');
-  const tabIds = ROLE_TABS_CONFIG[roleKey] || ['pendientes', 'historial'];
+  const canVer = hasPermission('vale:ver');
+  const canCrear = hasPermission('vale:crear');
+  const canDescontar = hasPermission('vale:descontar');
+
+  // Si no tiene permiso de ver, no hay pestañas de navegación de vales
+  if (!canVer) {
+    return null;
+  }
+
+  const isAlmacenista = rol === 'ALMACENISTA';
+  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin);
+
+  // Orden canónico basado en permisos efectivos:
+  // - Agregar +: Solo si tiene permiso de crear
+  // - Almacén, Pendientes: Operativo / consulta
+  // - Auditoría: Solo para roles / permisos de auditoría (excluyendo almacenistas)
+  // - Historial: Disponible para consulta general con vale:ver
+  const tabIds: string[] = [];
+  if (canCrear) {
+    tabIds.push('administracion');
+  }
+  tabIds.push('almacen', 'pendientes');
+  if (canAuditar) {
+    tabIds.push('auditoria');
+  }
+  tabIds.push('historial');
 
   const visibleTabs: TabItem[] = tabIds
     .map((id) => ALL_TABS[id])

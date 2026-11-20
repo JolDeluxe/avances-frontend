@@ -32,12 +32,12 @@ function formatFecha(fechaStr: string): string {
  * ACCESORIOS: NO | LISTADO | Fecha Req. | Estado | Línea | DIR | IND | BOL | Acciones
  */
 export function ListadosAdministracionPage(): ReactNode {
-  const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
-  const canVer = hasPermission('listado:ver');
+  const { user, hasPermission } = usePermissions();
+  const canVer = hasPermission('listado:ver') || hasPermission('listado:crear');
   const canCrear = hasPermission('listado:crear');
   const canEditar = hasPermission('listado:editar');
   const canEntregar = hasPermission('listado:entregar');
-  const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
+  const canRetroceder = hasPermission('listado:retroceder');
   const canCancelar = hasPermission('listado:cancelar');
 
   const {
@@ -53,7 +53,7 @@ export function ListadosAdministracionPage(): ReactNode {
 
   // ─── Desactivación / Atenuación visual de bloques por línea asignada ────────
   const { isBotaDisabled, isAccesoriosDisabled } = useMemo(() => {
-    if (isSuperAdmin || isAdmin) {
+    if (user?.rol === 'SUPER_ADMIN') {
       return { isBotaDisabled: false, isAccesoriosDisabled: false };
     }
     const lineas = user?.lineasAsignadas ?? [];
@@ -66,7 +66,7 @@ export function ListadosAdministracionPage(): ReactNode {
       isBotaDisabled: !hasBota,
       isAccesoriosDisabled: !hasAccesorios,
     };
-  }, [isSuperAdmin, isAdmin, user?.lineasAsignadas]);
+  }, [user]);
 
   // ─── Estado de modales y feedback ──────────────────────────────────────────
   const [selectedListado, setSelectedListado] = useState<ListadoItem | null>(null);
@@ -78,7 +78,7 @@ export function ListadosAdministracionPage(): ReactNode {
   const [transitionTipoFrente, setTransitionTipoFrente] = useState<TipoFrenteMaterial | undefined>(undefined);
   const [mutatingRows, setMutatingRows] = useState<Record<number, string | null>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [highlightedListadoId, setHighlightedListadoId] = useState<number | null>(null);
+  const [highlightedListadoId, setHighlightedListadoId] = useState<number | number[] | null>(null);
   const [entregandoListadoId, setEntregandoListadoId] = useState<number | null>(null);
   const [entregandoFrente, setEntregandoFrente] = useState<TipoFrenteMaterial | null>(null);
 
@@ -295,17 +295,23 @@ export function ListadosAdministracionPage(): ReactNode {
         onClose={() => setIsFormOpen(false)}
         listado={formListado}
         departamentos={departamentos}
-        onSuccess={(savedItem) => {
+        onSuccess={(saved) => {
           const isEdit = Boolean(formListado);
+          const savedItems = Array.isArray(saved) ? saved : saved ? [saved] : [];
           showFeedback(
             'success',
-            isEdit ? 'Listado actualizado correctamente.' : 'Listado creado con éxito.',
+            isEdit
+              ? 'Listado actualizado correctamente.'
+              : savedItems.length > 1
+                ? `${savedItems.length} listados creados con éxito.`
+                : 'Listado creado con éxito.',
           );
-          if (savedItem?.id) {
-            setHighlightedListadoId(savedItem.id);
+          const ids = savedItems.map((i) => i.id);
+          if (ids.length > 0) {
+            setHighlightedListadoId(ids);
             // El destello se desvanece automáticamente; limpiamos el estado a los 5 segundos
             setTimeout(() => {
-              setHighlightedListadoId((curr) => (curr === savedItem.id ? null : curr));
+              setHighlightedListadoId(null);
             }, 5000);
           }
           reloadListados();

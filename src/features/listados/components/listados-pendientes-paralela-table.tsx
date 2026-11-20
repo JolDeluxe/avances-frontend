@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@/components/ui/icon';
 import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { canOperateListadoFrente } from '../utils/classify-listados';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import type {
   ListadoItem,
@@ -48,6 +50,7 @@ interface ListadosParalelaTableProps {
   isBotaDisabled?: boolean;
   isAccesoriosDisabled?: boolean;
   allowSelection?: boolean;
+  isItemOperable?: (item: ListadoItem) => boolean;
   selectedBotaIds?: number[];
   selectedAccesoriosIds?: number[];
   onToggleSelectBota?: (id: number) => void;
@@ -145,6 +148,7 @@ function MenuAccionesFila({
   acciones?: ListadoAccionesHandlers;
   frentesPermitidos?: TipoFrenteMaterial[] | null;
 }): ReactNode {
+  const { user } = usePermissions();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -217,12 +221,21 @@ function MenuAccionesFila({
   const frentesPermitidosFiltrados = frentes.filter(
     (f) => !frentesPermitidos || frentesPermitidos.length === 0 || frentesPermitidos.includes(f.tipoFrente),
   );
-  const frentesPendientes = frentesPermitidosFiltrados.filter((f) => f.estado === 'PENDIENTE');
-  const frentesSeparados = frentesPermitidosFiltrados.filter((f) => f.estado === 'SEPARADO');
-  const frentesEntregados = frentesPermitidosFiltrados.filter((f) => f.estado === 'ENTREGADO');
-  const frentesParaRetroceder = frentesPermitidosFiltrados.filter(
-    (f) => f.estado === 'SEPARADO' || f.estado === 'ENTREGADO',
+  const frentesPendientes = frentesPermitidosFiltrados.filter(
+    (f) => f.estado === 'PENDIENTE' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'),
   );
+  const frentesSeparados = frentesPermitidosFiltrados.filter(
+    (f) => f.estado === 'SEPARADO' && canOperateListadoFrente(user, f.tipoFrente, 'almacen'),
+  );
+  const frentesEntregados = frentesPermitidosFiltrados.filter(
+    (f) => f.estado === 'ENTREGADO' && canOperateListadoFrente(user, f.tipoFrente, 'auditoria'),
+  );
+  const frentesParaRetroceder = frentesPermitidosFiltrados.filter((f) => {
+    if (f.estado === 'SEPARADO' || f.estado === 'ENTREGADO') {
+      return canOperateListadoFrente(user, f.tipoFrente, 'almacen');
+    }
+    return false;
+  });
 
   return (
     <div className="relative inline-block text-left">
@@ -520,6 +533,7 @@ export function ListadosPendientesParalelaTable({
   isBotaDisabled = false,
   isAccesoriosDisabled = false,
   allowSelection = false,
+  isItemOperable,
   selectedBotaIds = [],
   selectedAccesoriosIds = [],
   onToggleSelectBota,
@@ -772,13 +786,17 @@ export function ListadosPendientesParalelaTable({
                             {/* Checkbox de selección individual */}
                             {allowSelection && (
                               <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Seleccionar listado ${bota.numeroListado}`}
-                                  checked={isSelected}
-                                  onChange={() => onToggleSelectBota?.(bota.id)}
-                                  className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
-                                />
+                                {!isItemOperable || isItemOperable(bota) ? (
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Seleccionar listado ${bota.numeroListado}`}
+                                    checked={isSelected}
+                                    onChange={() => onToggleSelectBota?.(bota.id)}
+                                    className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className="text-text-muted/40 font-mono text-xs select-none">—</span>
+                                )}
                               </td>
                             )}
                             {/* LINEA / MAQ visible en TODAS las filas */}
@@ -924,13 +942,17 @@ export function ListadosPendientesParalelaTable({
                             {/* Checkbox de selección individual */}
                             {allowSelection && (
                               <td className="px-1 text-center whitespace-nowrap py-1 sm:py-1.5">
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Seleccionar listado ${acc.numeroListado}`}
-                                  checked={isSelected}
-                                  onChange={() => onToggleSelectAccesorios?.(acc.id)}
-                                  className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
-                                />
+                                {!isItemOperable || isItemOperable(acc) ? (
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Seleccionar listado ${acc.numeroListado}`}
+                                    checked={isSelected}
+                                    onChange={() => onToggleSelectAccesorios?.(acc.id)}
+                                    className="w-4 h-4 rounded border-border text-brand-primary accent-brand-primary focus:ring-0 focus:outline-hidden cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className="text-text-muted/40 font-mono text-xs select-none">—</span>
+                                )}
                               </td>
                             )}
                             {/* LINEA / MAQ visible en TODAS las filas */}

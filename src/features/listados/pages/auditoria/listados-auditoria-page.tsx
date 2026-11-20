@@ -11,6 +11,7 @@ import { ListadoAccionModal } from '../../components/listado-accion-modal';
 import { ListadoBatchAccionModal } from '../../components/listado-batch-accion-modal';
 import { Button } from '@/components/ui/button';
 import { listadosApi } from '../../api/listados-api';
+import { canOperateListadoFrente } from '../../utils/classify-listados';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import type { ListadoItem, TipoFrenteMaterial } from '../../types/listados.types';
 
@@ -36,10 +37,12 @@ function formatFecha(fechaStr: string): string {
  * La interacción se habilita según el rol/asignación del auditor (Directos, Indirectos o Ambos).
  */
 export function ListadosAuditoriaPage(): ReactNode {
-  const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission } = usePermissions();
   const canVer = hasPermission('listado:ver');
-  const canDescontar = isSuperAdmin || isAdmin || hasPermission('listado:descontar');
-  const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
+  const canDescontar = hasPermission('listado:descontar');
+  const canRetroceder = hasPermission('listado:retroceder');
+  const canEditar = hasPermission('listado:editar');
+  const canCancelar = hasPermission('listado:cancelar');
 
   // Solo traemos listados entregados a producción o en proceso con frentes entregados
   const {
@@ -80,12 +83,27 @@ export function ListadosAuditoriaPage(): ReactNode {
   });
 
   const handleToggleSelectDirectos = (id: number) => {
+    if (!canDescontar) return;
+    const item = directosItems.find((it) => it.id === id);
+    if (!item) return;
+    const frentes = item.frentes ?? [];
+    const dir =
+      frentes.find((f) => (f.tipoFrente === 'DIRECTOS' || f.tipoFrente === 'BOLSAS') && f.estado === 'ENTREGADO') ||
+      frentes.find((f) => f.tipoFrente === 'DIRECTOS' || f.tipoFrente === 'BOLSAS');
+    const tipo = dir?.tipoFrente || 'DIRECTOS';
+    if (!canOperateListadoFrente(user, tipo, 'auditoria')) return;
+
     setSelectedDirectosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
   const handleToggleSelectIndirectos = (id: number) => {
+    if (!canDescontar) return;
+    const item = indirectosItems.find((it) => it.id === id);
+    if (!item) return;
+    if (!canOperateListadoFrente(user, 'INDIRECTOS', 'auditoria')) return;
+
     setSelectedIndirectosIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -125,41 +143,24 @@ export function ListadosAuditoriaPage(): ReactNode {
 
   // Función de validación según el rol y tipoMaterialAuditor del auditor
   const puedeOperarFrente = (tipoFrente: TipoFrenteMaterial): boolean => {
-    if (isSuperAdmin || isAdmin) return true;
-    const rol = user?.rol?.toUpperCase();
-    if (rol === 'AUDITOR') {
-      if (!user?.tipoMaterialAuditor) return true;
-      const frentes = user.tipoMaterialAuditor.split(',').map((f) => f.trim().toUpperCase());
-      return frentes.includes('TODOS') || frentes.includes(tipoFrente);
-    }
-    return false;
+    return canOperateListadoFrente(user, tipoFrente, 'auditoria');
   };
 
   // ─── Desactivación / Atenuación visual de bloques en auditoría ──────────────
   // DIRECTOS Y BOLSAS está a la izquierda; INDIRECTOS está a la derecha.
   const { isDirectosDisabled, isIndirectosDisabled } = useMemo(() => {
-    if (isSuperAdmin || isAdmin) {
+    if (user?.rol === 'SUPER_ADMIN') {
       return { isDirectosDisabled: false, isIndirectosDisabled: false };
     }
-    const rol = user?.rol?.toUpperCase();
-    if (rol === 'AUDITOR') {
-      const tipo = user?.tipoMaterialAuditor?.toUpperCase();
-      if (!tipo) {
-        return { isDirectosDisabled: false, isIndirectosDisabled: false };
-      }
-      const frentes = tipo.split(',').map((f) => f.trim());
-      if (frentes.includes('TODOS')) {
-        return { isDirectosDisabled: false, isIndirectosDisabled: false };
-      }
-      const hasDirectosOBolsas = frentes.includes('DIRECTOS') || frentes.includes('BOLSAS');
-      const hasIndirectos = frentes.includes('INDIRECTOS');
-      return {
-        isDirectosDisabled: !hasDirectosOBolsas,
-        isIndirectosDisabled: !hasIndirectos,
-      };
-    }
-    return { isDirectosDisabled: false, isIndirectosDisabled: false };
-  }, [isSuperAdmin, isAdmin, user?.rol, user?.tipoMaterialAuditor]);
+    const canDirectos =
+      canOperateListadoFrente(user, 'DIRECTOS', 'auditoria') ||
+      canOperateListadoFrente(user, 'BOLSAS', 'auditoria');
+    const canIndirectos = canOperateListadoFrente(user, 'INDIRECTOS', 'auditoria');
+    return {
+      isDirectosDisabled: !canDirectos,
+      isIndirectosDisabled: !canIndirectos,
+    };
+  }, [user]);
 
   const [modalDescontar, setModalDescontar] = useState<{
     isOpen: boolean;
@@ -519,8 +520,8 @@ export function ListadosAuditoriaPage(): ReactNode {
           mutatingRows,
           canDescontar,
           canRetroceder,
-          canEditar: isSuperAdmin || isAdmin,
-          canCancelar: isSuperAdmin || isAdmin,
+          canEditar,
+          canCancelar,
           puedeOperarFrente,
         }}
       />
@@ -566,7 +567,14 @@ export function ListadosAuditoriaPage(): ReactNode {
         listado={selectedListado}
         departamentos={departamentos}
         onSuccess={(updated) => {
-          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
+          const items = Array.isArray(updated) ? updated : updated ? [updated] : [];
+          const numeros = items.map((i) => i.numeroListado).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} listados actualizados correctamente.`
+              : `Listado ${numeros} actualizado correctamente.`,
+          );
           reloadListados();
         }}
       />

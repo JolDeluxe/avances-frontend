@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { useVales } from '../../hooks/use-vales';
@@ -10,7 +10,7 @@ import { ValeFormModal } from '../../components/vale-form-modal';
 import { ValeTransitionModal, type TransitionAction } from '../../components/vale-transition-modal';
 import { ValeAccionModal, type TipoAccionVale } from '../../components/vale-accion-modal';
 import { ValeBatchAccionModal } from '../../components/vale-batch-accion-modal';
-import { classifyVales, getValesColumnDisabledFlags } from '../../utils/classify-vales';
+import { classifyVales, getValesColumnDisabledFlags, canOperateValeItem } from '../../utils/classify-vales';
 import type { ValeItem } from '../../types/vales.types';
 
 /**
@@ -33,19 +33,18 @@ function formatFecha(fechaStr: string): string {
  *   seleccionar filas y operar individual o masivamente.
  */
 export function ValesPendientesPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission, hasAnyPermission } = usePermissions();
 
-  const canVer = isSuperAdmin || isAdmin || hasPermission('vale:ver');
-  const canSeparar = isSuperAdmin || isAdmin || hasPermission('vale:separar');
-  const canEntregar = isSuperAdmin || isAdmin || hasPermission('vale:entregar');
-  const canDescontar = isSuperAdmin || isAdmin || hasPermission('vale:descontar');
-  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
-  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
-  const canRetroceder = isSuperAdmin || isAdmin || hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canVer = hasPermission('vale:ver');
+  const canSeparar = hasPermission('vale:separar');
+  const canEntregar = hasPermission('vale:entregar');
+  const canDescontar = hasPermission('vale:descontar');
+  const canEditar = hasPermission('vale:editar');
+  const canCancelar = hasPermission('vale:cancelar');
+  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
 
   // Un usuario de solo lectura (ej. GERENCIA sin permisos de operación) solo consulta el tablero
-  const canInteract =
-    isSuperAdmin || isAdmin || canSeparar || canEntregar || canDescontar;
+  const canInteract = canSeparar || canEntregar || canDescontar;
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
@@ -123,16 +122,32 @@ export function ValesPendientesPage(): ReactNode {
     return classifyVales(itemsPendientes);
   }, [itemsPendientes]);
 
+  // Verificador estricto de si un vale es operable por el usuario según su estado y alcance
+  const isValeOperable = useCallback(
+    (v: ValeItem): boolean => {
+      if (!canOperateValeItem(user, v)) return false;
+      if (v.estado === 'PENDIENTE') return canSeparar;
+      if (v.estado === 'SEPARADO') return canEntregar;
+      if (v.estado === 'ENTREGADO') return canDescontar;
+      return false;
+    },
+    [user, canSeparar, canEntregar, canDescontar],
+  );
+
   // ─── Handlers de selección por bloque ─────────────────────────────────────
   const handleToggleBotaId = (id: number) => {
+    const item = botaItems.find((i) => i.id === id);
+    if (!item || !isValeOperable(item)) return;
     setSelectedBotaIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((it) => it !== id) : [...prev, id],
     );
   };
 
   const handleToggleAccesoriosId = (id: number) => {
+    const item = accesoriosItems.find((i) => i.id === id);
+    if (!item || !isValeOperable(item)) return;
     setSelectedAccesoriosIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((it) => it !== id) : [...prev, id],
     );
   };
 
@@ -142,7 +157,7 @@ export function ValesPendientesPage(): ReactNode {
       return;
     }
     const ids = botaItems
-      .filter((i) => i.estado !== 'CANCELADO' && i.estado !== 'DESCONTADO')
+      .filter((i) => isValeOperable(i))
       .map((i) => i.id);
     setSelectedBotaIds(ids);
   };
@@ -153,7 +168,7 @@ export function ValesPendientesPage(): ReactNode {
       return;
     }
     const ids = accesoriosItems
-      .filter((i) => i.estado !== 'CANCELADO' && i.estado !== 'DESCONTADO')
+      .filter((i) => isValeOperable(i))
       .map((i) => i.id);
     setSelectedAccesoriosIds(ids);
   };
@@ -432,6 +447,7 @@ export function ValesPendientesPage(): ReactNode {
         onToggleAllBota={handleToggleAllBota}
         onToggleAllAccesorios={handleToggleAllAccesorios}
         allowSelection={canInteract}
+        isItemOperable={isValeOperable}
         hideActions={!canInteract}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
@@ -506,9 +522,17 @@ export function ValesPendientesPage(): ReactNode {
         departamentosVale={departamentosVale}
         onCatalogosChanged={reloadCatalogos}
         onSuccess={(saved) => {
-          showFeedback('success', `Vale ${saved?.folio ?? ''} actualizado correctamente.`);
-          if (saved?.id) {
-            triggerHighlight(saved.id);
+          const items = Array.isArray(saved) ? saved : saved ? [saved] : [];
+          const folios = items.map((i) => i.folio).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} vales registrados correctamente.`
+              : `Vale ${folios} registrado correctamente.`,
+          );
+          const ids = items.map((i) => i.id);
+          if (ids.length > 0) {
+            triggerHighlight(ids);
           }
           void reload(true);
         }}

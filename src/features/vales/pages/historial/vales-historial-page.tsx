@@ -45,13 +45,11 @@ const MESES = [
  * Los años disponibles se obtienen dinámicamente de los registros reales existentes.
  */
 export function ValesHistorialPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission, hasAnyPermission } = usePermissions();
   const canVer = hasPermission('vale:ver');
-  const canRetroceder =
-    (isSuperAdmin || isAdmin) &&
-    hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
-  const canEditar = (isSuperAdmin || isAdmin) && hasPermission('vale:editar');
-  const canCancelar = (isSuperAdmin || isAdmin) && hasPermission('vale:cancelar');
+  const canRetroceder = hasAnyPermission(['vale:retroceder', 'vale:retroceder_descuento']);
+  const canEditar = hasPermission('vale:editar');
+  const canCancelar = hasPermission('vale:cancelar');
 
   // ─── Desactivación / Atenuación visual de bloques por alcance asignado ─────
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
@@ -455,7 +453,14 @@ export function ValesHistorialPage(): ReactNode {
         departamentosVale={departamentosVale}
         onCatalogosChanged={reloadCatalogos}
         onSuccess={(updated) => {
-          showFeedback('success', `Vale ${updated?.folio ?? ''} actualizado correctamente.`);
+          const items = Array.isArray(updated) ? updated : updated ? [updated] : [];
+          const folios = items.map((i) => i.folio).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} vales actualizados correctamente.`
+              : `Vale ${folios} actualizado correctamente.`,
+          );
           void reload();
         }}
       />

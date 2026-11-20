@@ -47,6 +47,7 @@ export interface PermisoSimple {
   id: number;
   codigo: string;
   modulo: string;
+  nombre?: string;
   descripcion: string;
 }
 

@@ -46,13 +46,15 @@ const MESES = [
  * Los años disponibles se obtienen dinámicamente de los registros reales existentes.
  */
 export function ListadosHistorialPage(): ReactNode {
-  const { user, hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission } = usePermissions();
   const canVer = hasPermission('listado:ver');
-  const canRetroceder = (isSuperAdmin || isAdmin) && hasPermission('listado:retroceder');
+  const canRetroceder = hasPermission('listado:retroceder');
+  const canEditar = hasPermission('listado:editar');
+  const canCancelar = hasPermission('listado:cancelar');
 
   // ─── Desactivación / Atenuación visual de bloques por línea asignada ────────
   const { isBotaDisabled, isAccesoriosDisabled } = useMemo(() => {
-    if (isSuperAdmin || isAdmin) {
+    if (user?.rol === 'SUPER_ADMIN') {
       return { isBotaDisabled: false, isAccesoriosDisabled: false };
     }
     const lineas = user?.lineasAsignadas ?? [];
@@ -65,7 +67,7 @@ export function ListadosHistorialPage(): ReactNode {
       isBotaDisabled: !hasBota,
       isAccesoriosDisabled: !hasAccesorios,
     };
-  }, [isSuperAdmin, isAdmin, user?.lineasAsignadas]);
+  }, [user]);
 
   // ─── Control de Año y Mes (Sincronizado con URL SearchParams) ───────────
   const [searchParams, setSearchParams] = useSearchParams();
@@ -416,8 +418,8 @@ export function ListadosHistorialPage(): ReactNode {
           onRetrocederFrente: handleOpenRetrocederFrente,
           onCancelar: handleOpenCancelarListado,
           canRetroceder,
-          canEditar: isSuperAdmin || isAdmin,
-          canCancelar: isSuperAdmin || isAdmin,
+          canEditar,
+          canCancelar,
         }}
       />
 
@@ -452,7 +454,14 @@ export function ListadosHistorialPage(): ReactNode {
         listado={selectedListado}
         departamentos={departamentos}
         onSuccess={(updated) => {
-          showFeedback('success', `Listado ${updated?.numeroListado ?? ''} actualizado correctamente.`);
+          const items = Array.isArray(updated) ? updated : updated ? [updated] : [];
+          const numeros = items.map((i) => i.numeroListado).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} listados actualizados correctamente.`
+              : `Listado ${numeros} actualizado correctamente.`,
+          );
           reloadListados();
         }}
       />

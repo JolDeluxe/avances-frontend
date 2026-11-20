@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition } from 'react';
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { listadosApi } from '../api/listados-api';
 import { useListadosStreamListener } from '../context/listados-stream-context';
@@ -26,6 +26,10 @@ const DEFAULT_PAGINATION: PaginationMeta = {
  * El filtro de búsqueda aplica debounce de 350ms para no saturar el backend.
  *
  * Paginación: usa las claves reales del backend: page / limit / total / totalPages.
+ * Animaciones en tiempo real:
+ *   - Destello amarillo (highlight) al registrar, crear o separar materiales.
+ *   - Destello verde de entrega al entregar materiales a producción.
+ *   - Destello morado de descuento al descontar materiales en sistema.
  */
 interface UseListadosOptions {
   fixedEstado?: EstadoListado | string;
@@ -44,6 +48,40 @@ export function useListados(options?: UseListadosOptions) {
   const [pagination, setPagination] = useState<PaginationMeta>(DEFAULT_PAGINATION);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ─── Estados de animación de parpadeo reactivo (idéntico a Vales) ──────────
+  const [highlightedIds, setHighlightedIds] = useState<number[]>([]);
+  const [entregandoIds, setEntregandoIds] = useState<number[]>([]);
+  const [descontandoIds, setDescontandoIds] = useState<number[]>([]);
+
+  const triggerHighlight = useCallback((idOrIds: number | number[]) => {
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    if (ids.length === 0) return;
+    setHighlightedIds((prev) => Array.from(new Set([...prev, ...ids])));
+    setTimeout(() => {
+      setHighlightedIds((prev) => prev.filter((item) => !ids.includes(item)));
+    }, 4500);
+  }, []);
+
+  const triggerEntregando = useCallback((idOrIds: number | number[], onComplete?: () => void) => {
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    if (ids.length === 0) return;
+    setEntregandoIds((prev) => Array.from(new Set([...prev, ...ids])));
+    setTimeout(() => {
+      setEntregandoIds((prev) => prev.filter((item) => !ids.includes(item)));
+      onComplete?.();
+    }, 2200);
+  }, []);
+
+  const triggerDescontando = useCallback((idOrIds: number | number[], onComplete?: () => void) => {
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    if (ids.length === 0) return;
+    setDescontandoIds((prev) => Array.from(new Set([...prev, ...ids])));
+    setTimeout(() => {
+      setDescontandoIds((prev) => prev.filter((item) => !ids.includes(item)));
+      onComplete?.();
+    }, 2200);
+  }, []);
 
   // ─── Leer estado desde URL o fixedEstado ──────────────────────────────────
 
@@ -140,41 +178,57 @@ export function useListados(options?: UseListadosOptions) {
     fetchListados();
   }, [fetchListados]);
 
+  const fetchRef = useRef(fetchListados);
+  useEffect(() => {
+    fetchRef.current = fetchListados;
+  }, [fetchListados]);
+
+  // Debounce para refetches en background tras recibir ráfagas de eventos SSE
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleFetch = useCallback(() => {
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+    fetchDebounceRef.current = setTimeout(() => {
+      void fetchRef.current(true);
+    }, 120);
+  }, []);
+
   // ─── Sincronización en Tiempo Real (SSE) ──────────────────────────────────
   useListadosStreamListener(
     useCallback(
       (evento: ListadoEventoPayload) => {
-        // 1. Si el evento afecta a un ítem actualmente visible en la lista
-        setItems((currentItems) => {
-          const index = currentItems.findIndex((it) => it.id === evento.listadoId);
-          if (index !== -1) {
-            // El listado está en la vista: actualizar in-place
+        // 1. Manejo de lotes operados masivamente (LOTE_TRANSICIONADO)
+        if (evento.tipo === 'LOTE_TRANSICIONADO' && evento.idsAfectados && evento.idsAfectados.length > 0) {
+          const ids = evento.idsAfectados;
+          if (evento.estadoGlobal === 'DESCONTADO') {
+            triggerDescontando(ids, () => scheduleFetch());
+          } else if (evento.estadoGlobal === 'ENTREGADO_A_PRODUCCION') {
+            triggerEntregando(ids, () => scheduleFetch());
+          } else {
+            triggerHighlight(ids);
+            scheduleFetch();
+          }
+          return;
+        }
+
+        // 2. Creación de listado (LISTADO_CREADO): resalta y recarga la lista
+        if (evento.tipo === 'LISTADO_CREADO' && evento.listadoId) {
+          triggerHighlight(evento.listadoId);
+          scheduleFetch();
+          return;
+        }
+
+        // 3. Eventos individuales de frentes / estados
+        if (evento.listadoId) {
+          const id = evento.listadoId;
+
+          // Actualización in-place inmediata para que los íconos/indicadores cambien al instante
+          setItems((currentItems) => {
+            const index = currentItems.findIndex((it) => it.id === id);
+            if (index === -1) return currentItems;
             const existingItem = currentItems[index];
 
-            // Si hay filtro de estado activo y el nuevo estadoGlobal no encaja con el filtro:
-            if (estado) {
-              const estadosPermitidos = estado.split(',').map((s) => s.trim());
-              if (!estadosPermitidos.includes(evento.estadoGlobal)) {
-                // Programar recarga y remoción con un breve delay (2200ms) para permitir
-                // que las animaciones visuales (verde de entrega / morado de descuento) completen
-                setTimeout(() => {
-                  fetchListados(true);
-                  setItems((prev) => prev.filter((it) => it.id !== evento.listadoId));
-                }, 2200);
-              }
-            }
-
-            // Si hay excludeEstado y el nuevo estado coincide con excludeEstado:
-            if (excludeEstado && evento.estadoGlobal === excludeEstado) {
-              setTimeout(() => {
-                fetchListados(true);
-                setItems((prev) => prev.filter((it) => it.id !== evento.listadoId));
-              }, 2200);
-            }
-
-            // Actualizar frentes y estado global del ítem
             const updatedFrentes = existingItem.frentes.map((frente) => {
-              const matchingFrente = evento.frentes.find((ef) => ef.tipoFrente === frente.tipoFrente);
+              const matchingFrente = evento.frentes?.find((ef) => ef.tipoFrente === frente.tipoFrente);
               if (matchingFrente) {
                 return {
                   ...frente,
@@ -186,7 +240,7 @@ export function useListados(options?: UseListadosOptions) {
 
             const updatedItem: ListadoItem = {
               ...existingItem,
-              estado: evento.estadoGlobal,
+              estado: evento.estadoGlobal ?? existingItem.estado,
               frentes: updatedFrentes,
               updatedAt: evento.timestamp,
               fechaActualizacion: evento.timestamp,
@@ -195,18 +249,31 @@ export function useListados(options?: UseListadosOptions) {
             const nextItems = [...currentItems];
             nextItems[index] = updatedItem;
             return nextItems;
-          }
+          });
 
-          // 2. Si es una creación (LISTADO_CREADO) o lote de transiciones donde el listado no estaba visible
-          // Si califica para la vista actual (departamento, línea, estado), refrescar en segundo plano sin congelar UI
-          if (evento.tipo === 'LISTADO_CREADO' || evento.tipo === 'LOTE_TRANSICIONADO') {
-            fetchListados(true);
+          // Disparar animación de parpadeo según el avance de estado
+          if (evento.tipo === 'FRENTE_DESCONTADO' || evento.estadoGlobal === 'DESCONTADO') {
+            triggerDescontando(id, () => {
+              scheduleFetch();
+            });
+          } else if (
+            evento.tipo === 'FRENTE_ENTREGADO' ||
+            evento.estadoGlobal === 'ENTREGADO_A_PRODUCCION'
+          ) {
+            triggerEntregando(id, () => {
+              scheduleFetch();
+            });
+          } else {
+            // FRENTE_SEPARADO, FRENTE_RETROCEDIDO, LISTADO_ACTUALIZADO
+            triggerHighlight(id);
+            scheduleFetch();
           }
+          return;
+        }
 
-          return currentItems;
-        });
+        scheduleFetch();
       },
-      [estado, excludeEstado, fetchListados],
+      [scheduleFetch, triggerDescontando, triggerEntregando, triggerHighlight],
     ),
   );
 
@@ -303,11 +370,11 @@ export function useListados(options?: UseListadosOptions) {
   );
 
   const setPage = useCallback(
-    (nuevaPagina: number) => {
+    (newPage: number) => {
       startTransition(() => {
         setSearchParams((prev) => {
           const next = new URLSearchParams(prev);
-          next.set('page', String(nuevaPagina));
+          next.set('page', String(newPage));
           return next;
         });
       });
@@ -319,12 +386,12 @@ export function useListados(options?: UseListadosOptions) {
     startTransition(() => {
       setSearchParams(new URLSearchParams());
     });
-    setSearchTerm('');
   }, [setSearchParams]);
 
   return {
     // Datos
     items,
+    setItems,
     pagination,
     isLoading,
     error,
@@ -348,5 +415,13 @@ export function useListados(options?: UseListadosOptions) {
     setFechaHasta,
     setPage,
     resetFilters,
+
+    // Animaciones y parpadeo reactivo
+    highlightedIds,
+    entregandoIds,
+    descontandoIds,
+    triggerHighlight,
+    triggerEntregando,
+    triggerDescontando,
   };
 }

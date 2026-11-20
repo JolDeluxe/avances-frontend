@@ -10,15 +10,11 @@ import { useListados } from '@/features/listados/hooks/use-listados';
 import { useLineasProduccion } from '@/features/listados/hooks/use-lineas-produccion';
 import { ListadosPendientesParalelaTable } from '@/features/listados/components/listados-pendientes-paralela-table';
 import { clasificarListadosPorArea } from '@/features/listados/utils/classify-listados';
-import { useListadosStreamListener } from '@/features/listados/context/listados-stream-context';
-import type { ListadoEventoPayload } from '@/features/listados/types/listados-events.types';
 
 // Vales
 import { useVales } from '@/features/vales/hooks/use-vales';
 import { ValesPendientesParalelaTable } from '@/features/vales/components/vales-pendientes-paralela-table';
 import { classifyVales } from '@/features/vales/utils/classify-vales';
-import { useValesStreamListener } from '@/features/vales/context/vales-stream-context';
-import type { ValeEventoPayload } from '@/features/vales/types/vales-events.types';
 
 import type { ModuloProyeccion, ProyeccionPageProps } from '../types/proyeccion.types';
 
@@ -66,14 +62,111 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
     year: 'numeric',
   });
 
+  // ─── Datos en Tiempo Real: Listados Pendientes ──────────────────────────────
+  const {
+    items: itemsListados,
+    isLoading: isLoadingListados,
+    error: errorListados,
+    reloadListados,
+    highlightedIds: highlightedListadosIds,
+    entregandoIds: entregandoListadosIds,
+    descontandoIds: descontandoListadosIds,
+  } = useListados({
+    fixedEstado: 'PENDIENTE,EN_PROCESO,SEPARADO,ENTREGADO_A_PRODUCCION',
+    modoGlobal: true,
+    customLimit: 1000,
+  });
+
+  const { todasLasLineas } = useLineasProduccion();
+
+  const itemsListadosPendientes = useMemo(() => {
+    return itemsListados.filter((item) => {
+      if (descontandoListadosIds.includes(item.id) || entregandoListadosIds.includes(item.id)) {
+        return true;
+      }
+      if ((item.estado as string) === 'CANCELADO' || (item.estado as string) === 'DESCONTADO') {
+        return false;
+      }
+      if (item.frentes && item.frentes.length > 0) {
+        return item.frentes.some((f) => f.estado !== 'DESCONTADO');
+      }
+      return (item.estado as string) !== 'DESCONTADO' && (item.estado as string) !== 'CANCELADO';
+    });
+  }, [itemsListados, descontandoListadosIds, entregandoListadosIds]);
+
+  const {
+    botaItems: listadosBota,
+    accesoriosItems: listadosAccesorios,
+    noClasificados: listadosNoClasificados,
+  } = useMemo(() => {
+    return clasificarListadosPorArea(itemsListadosPendientes, todasLasLineas);
+  }, [itemsListadosPendientes, todasLasLineas]);
+
+  // ─── Datos en Tiempo Real: Vales Pendientes ─────────────────────────────────
+  const {
+    items: itemsVales,
+    isLoading: isLoadingVales,
+    error: errorVales,
+    reload: reloadVales,
+    highlightedIds: highlightedValesIds,
+    entregandoIds: entregandoValesIds,
+    descontandoIds: descontandoValesIds,
+  } = useVales({
+    scopeView: 'general',
+    fixedEstado: 'PENDIENTE,SEPARADO,ENTREGADO',
+    customLimit: 500,
+  });
+
+  const itemsValesPendientes = useMemo(() => {
+    return itemsVales.filter((item) => {
+      if (descontandoValesIds.includes(item.id) || entregandoValesIds.includes(item.id)) {
+        return true;
+      }
+      return item.estado !== 'CANCELADO' && item.estado !== 'DESCONTADO';
+    });
+  }, [itemsVales, descontandoValesIds, entregandoValesIds]);
+
+  const {
+    botaItems: valesBota,
+    accesoriosItems: valesAccesorios,
+    otroItems: valesOtro,
+  } = useMemo(() => {
+    return classifyVales(itemsValesPendientes);
+  }, [itemsValesPendientes]);
+
   // ─── Control de Vistas y Rotación Automática Continua (Loop) ───────────────
+  const hasListados = itemsListadosPendientes.length > 0;
+  const hasVales = itemsValesPendientes.length > 0;
+  const hasBothPendientes = hasListados && hasVales;
+  const hasAnyPendientes = hasListados || hasVales;
+
+  // Selección de pestaña inicial: respeta preferencias o selecciona la que tenga pendientes
   const defaultTab: ModuloProyeccion = canVerListados ? initialVista : 'vales';
   const [activeTab, setActiveTab] = useState<ModuloProyeccion>(defaultTab);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(ROTATION_SECONDS);
 
+  // La rotación automática solo debe ocurrir si:
+  // 1. autoRotate está activado
+  // 2. El usuario tiene permisos para ver ambos módulos
+  // 3. Ambos módulos tienen pendientes activos (si uno o ambos están vacíos, no rota ni gira ni muestra barra)
+  const shouldRotate = autoRotate && canVerListados && canVerVales && hasBothPendientes;
+
+  // Si una sección queda vacía pero la otra sí tiene pendientes, enfocar automáticamente la activa
   useEffect(() => {
-    if (!autoRotate || !canVerListados || !canVerVales) {
+    if (!autoRotate) return;
+    if (activeTab === 'listados' && !hasListados && hasVales && canVerVales) {
+      setActiveTab('vales');
+      setSecondsRemaining(ROTATION_SECONDS);
+    } else if (activeTab === 'vales' && !hasVales && hasListados && canVerListados) {
+      setActiveTab('listados');
+      setSecondsRemaining(ROTATION_SECONDS);
+    }
+  }, [hasListados, hasVales, activeTab, canVerListados, canVerVales, autoRotate]);
+
+  useEffect(() => {
+    if (!shouldRotate) {
+      setSecondsRemaining(ROTATION_SECONDS);
       return;
     }
 
@@ -89,7 +182,7 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [secondsRemaining, autoRotate, canVerListados, canVerVales]);
+  }, [secondsRemaining, shouldRotate]);
 
   const handleSelectTab = (tab: ModuloProyeccion) => {
     setActiveTab(tab);
@@ -207,124 +300,6 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
     };
   }, [fullscreenMode, setFullscreenMode]);
 
-  // ─── Datos en Tiempo Real: Listados Pendientes ──────────────────────────────
-  const {
-    items: itemsListados,
-    isLoading: isLoadingListados,
-    error: errorListados,
-    reloadListados,
-  } = useListados({
-    fixedEstado: 'PENDIENTE,EN_PROCESO,SEPARADO,ENTREGADO_A_PRODUCCION',
-    modoGlobal: true,
-    customLimit: 1000,
-  });
-
-  const { todasLasLineas } = useLineasProduccion();
-
-  const [highlightedListadosIds, setHighlightedListadosIds] = useState<number[]>([]);
-  const [entregandoListadosIds, setEntregandoListadosIds] = useState<number[]>([]);
-  const [descontandoListadosIds, setDescontandoListadosIds] = useState<number[]>([]);
-
-  useListadosStreamListener((evento: ListadoEventoPayload) => {
-    const id = evento.listadoId;
-    if (!id) return;
-
-    if (evento.tipo === 'FRENTE_ENTREGADO') {
-      setEntregandoListadosIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setEntregandoListadosIds((prev) => prev.filter((item) => item !== id));
-      }, 2500);
-    } else if (evento.tipo === 'FRENTE_DESCONTADO') {
-      setDescontandoListadosIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setDescontandoListadosIds((prev) => prev.filter((item) => item !== id));
-      }, 2500);
-    } else {
-      setHighlightedListadosIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setHighlightedListadosIds((prev) => prev.filter((item) => item !== id));
-      }, 3500);
-    }
-  });
-
-  const itemsListadosPendientes = useMemo(() => {
-    return itemsListados.filter((item) => {
-      if (descontandoListadosIds.includes(item.id) || entregandoListadosIds.includes(item.id)) {
-        return true;
-      }
-      if ((item.estado as string) === 'CANCELADO' || (item.estado as string) === 'DESCONTADO') {
-        return false;
-      }
-      if (item.frentes && item.frentes.length > 0) {
-        return item.frentes.some((f) => f.estado !== 'DESCONTADO');
-      }
-      return (item.estado as string) !== 'DESCONTADO' && (item.estado as string) !== 'CANCELADO';
-    });
-  }, [itemsListados, descontandoListadosIds, entregandoListadosIds]);
-
-  const {
-    botaItems: listadosBota,
-    accesoriosItems: listadosAccesorios,
-    noClasificados: listadosNoClasificados,
-  } = useMemo(() => {
-    return clasificarListadosPorArea(itemsListadosPendientes, todasLasLineas);
-  }, [itemsListadosPendientes, todasLasLineas]);
-
-  // ─── Datos en Tiempo Real: Vales Pendientes ─────────────────────────────────
-  const {
-    items: itemsVales,
-    isLoading: isLoadingVales,
-    error: errorVales,
-    reload: reloadVales,
-  } = useVales({
-    scopeView: 'general',
-    fixedEstado: 'PENDIENTE,SEPARADO,ENTREGADO',
-    customLimit: 500,
-  });
-
-  const [highlightedValesIds, setHighlightedValesIds] = useState<number[]>([]);
-  const [entregandoValesIds, setEntregandoValesIds] = useState<number[]>([]);
-  const [descontandoValesIds, setDescontandoValesIds] = useState<number[]>([]);
-
-  useValesStreamListener((evento: ValeEventoPayload) => {
-    const id = evento.valeId;
-    if (!id) return;
-
-    if (evento.tipo === 'VALE_ENTREGADO' || evento.tipo === 'VALE_SEPARADO_Y_ENTREGADO') {
-      setEntregandoValesIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setEntregandoValesIds((prev) => prev.filter((item) => item !== id));
-      }, 2500);
-    } else if (evento.tipo === 'VALE_DESCONTADO') {
-      setDescontandoValesIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setDescontandoValesIds((prev) => prev.filter((item) => item !== id));
-      }, 2500);
-    } else {
-      setHighlightedValesIds((prev) => [...prev, id]);
-      setTimeout(() => {
-        setHighlightedValesIds((prev) => prev.filter((item) => item !== id));
-      }, 3500);
-    }
-  });
-
-  const itemsValesPendientes = useMemo(() => {
-    return itemsVales.filter((item) => {
-      if (descontandoValesIds.includes(item.id) || entregandoValesIds.includes(item.id)) {
-        return true;
-      }
-      return item.estado !== 'CANCELADO' && item.estado !== 'DESCONTADO';
-    });
-  }, [itemsVales, descontandoValesIds, entregandoValesIds]);
-
-  const {
-    botaItems: valesBota,
-    accesoriosItems: valesAccesorios,
-    otroItems: valesOtro,
-  } = useMemo(() => {
-    return classifyVales(itemsValesPendientes);
-  }, [itemsValesPendientes]);
-
   // Recarga manual global de datos
   const handleReloadData = async () => {
     if ('serviceWorker' in navigator) {
@@ -366,7 +341,7 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
       {/* ─── ENCABEZADO MULTIFUNCIÓN DE PROYECCIÓN ─── */}
       <div className="relative overflow-hidden bg-app-surface border border-border rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 shadow-2xs flex items-center justify-between gap-3 flex-wrap">
         {/* Barra superior de progreso de rotación automática (track visible + barra de progreso) */}
-        {autoRotate && canVerListados && canVerVales && (
+        {shouldRotate && (
           <div
             key={activeTab}
             className="absolute top-0 left-0 right-0 h-1 sm:h-1.5 bg-brand-primary/15 overflow-hidden"
@@ -390,11 +365,14 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
               <button
                 type="button"
                 onClick={() => handleSelectTab('listados')}
+                disabled={!hasListados}
                 className={cn(
-                  'flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm sm:text-base font-black tracking-wide transition-all cursor-pointer select-none',
+                  'flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm sm:text-base font-black tracking-wide transition-all select-none',
                   activeTab === 'listados'
-                    ? 'bg-app-surface text-brand-primary shadow-xs border-2 border-brand-primary/40'
-                    : 'text-text-muted hover:text-text-primary hover:bg-app-surface/60',
+                    ? 'bg-app-surface text-brand-primary shadow-xs border-2 border-brand-primary/40 cursor-default'
+                    : !hasListados
+                      ? 'text-text-muted/40 bg-transparent border-transparent opacity-40 cursor-default pointer-events-none'
+                      : 'text-text-muted hover:text-text-primary hover:bg-app-surface/60 cursor-pointer',
                 )}
               >
                 <Icon name="format_list_bulleted" size="18px" />
@@ -404,7 +382,9 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
                     'px-2 py-0.5 rounded-full text-xs sm:text-sm font-mono font-bold leading-tight',
                     activeTab === 'listados'
                       ? 'bg-brand-primary text-white'
-                      : 'bg-cuadra-arena text-text-secondary border border-border/80',
+                      : !hasListados
+                        ? 'bg-cuadra-arena/40 text-text-muted/50 border border-border/30'
+                        : 'bg-cuadra-arena text-text-secondary border border-border/80',
                   )}
                 >
                   {itemsListadosPendientes.length}
@@ -416,11 +396,14 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
               <button
                 type="button"
                 onClick={() => handleSelectTab('vales')}
+                disabled={!hasVales}
                 className={cn(
-                  'flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm sm:text-base font-black tracking-wide transition-all cursor-pointer select-none',
+                  'flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm sm:text-base font-black tracking-wide transition-all select-none',
                   activeTab === 'vales'
-                    ? 'bg-app-surface text-brand-primary shadow-xs border-2 border-brand-primary/40'
-                    : 'text-text-muted hover:text-text-primary hover:bg-app-surface/60',
+                    ? 'bg-app-surface text-brand-primary shadow-xs border-2 border-brand-primary/40 cursor-default'
+                    : !hasVales
+                      ? 'text-text-muted/40 bg-transparent border-transparent opacity-40 cursor-default pointer-events-none'
+                      : 'text-text-muted hover:text-text-primary hover:bg-app-surface/60 cursor-pointer',
                 )}
               >
                 <Icon name="receipt_long" size="18px" />
@@ -430,7 +413,9 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
                     'px-2 py-0.5 rounded-full text-xs sm:text-sm font-mono font-bold leading-tight',
                     activeTab === 'vales'
                       ? 'bg-brand-primary text-white'
-                      : 'bg-cuadra-arena text-text-secondary border border-border/80',
+                      : !hasVales
+                        ? 'bg-cuadra-arena/40 text-text-muted/50 border border-border/30'
+                        : 'bg-cuadra-arena text-text-secondary border border-border/80',
                   )}
                 >
                   {itemsValesPendientes.length}
@@ -444,23 +429,30 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
             <button
               type="button"
               onClick={handleToggleAutoRotate}
+              disabled={!hasBothPendientes}
               className={cn(
-                'h-9 w-9 flex items-center justify-center rounded-xl border transition-all cursor-pointer select-none shadow-2xs',
-                autoRotate
-                  ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30 hover:bg-brand-primary/20'
-                  : 'bg-app-surface text-text-muted border-border hover:text-text-primary hover:bg-cuadra-arena/40',
+                'h-9 w-9 flex items-center justify-center rounded-xl border transition-all select-none shadow-2xs',
+                !hasBothPendientes
+                  ? 'bg-app-surface text-text-muted/30 border-border/40 opacity-40 cursor-default pointer-events-none'
+                  : autoRotate
+                    ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30 hover:bg-brand-primary/20 cursor-pointer'
+                    : 'bg-app-surface text-text-muted border-border hover:text-text-primary hover:bg-cuadra-arena/40 cursor-pointer',
               )}
               title={
-                autoRotate
-                  ? 'Rotación activa (clic para pausar)'
-                  : 'Rotación pausada (clic para reanudar)'
+                !hasAnyPendientes
+                  ? 'Sin pendientes de producción'
+                  : !hasBothPendientes
+                    ? 'Rotación en espera (solo una sección tiene pendientes)'
+                    : autoRotate
+                      ? 'Rotación activa (clic para pausar)'
+                      : 'Rotación pausada (clic para reanudar)'
               }
             >
               <Icon
-                name={autoRotate ? 'sync' : 'pause'}
+                name={!autoRotate ? 'pause' : 'sync'}
                 size="18px"
-                className={autoRotate ? 'animate-spin text-brand-primary' : 'text-text-muted'}
-                style={autoRotate ? { animationDuration: '4s' } : undefined}
+                className={shouldRotate ? 'animate-spin text-brand-primary' : 'text-text-muted/40'}
+                style={shouldRotate ? { animationDuration: '4s' } : undefined}
               />
             </button>
           )}

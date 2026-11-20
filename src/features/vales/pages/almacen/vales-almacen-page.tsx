@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { useVales } from '../../hooks/use-vales';
@@ -10,7 +10,7 @@ import { ValeFormModal } from '../../components/vale-form-modal';
 import { ValeTransitionModal, type TransitionAction } from '../../components/vale-transition-modal';
 import { ValeAccionModal, type TipoAccionVale } from '../../components/vale-accion-modal';
 import { ValeBatchAccionModal } from '../../components/vale-batch-accion-modal';
-import { classifyVales, getValesColumnDisabledFlags } from '../../utils/classify-vales';
+import { classifyVales, getValesColumnDisabledFlags, canOperateValeItem } from '../../utils/classify-vales';
 import type { ValeItem } from '../../types/vales.types';
 
 /**
@@ -31,14 +31,16 @@ function formatFecha(fechaStr: string): string {
  * - Cuando es entregado a producción (`ENTREGADO`), sale de Almacén y pasa a Auditoría.
  */
 export function ValesAlmacenPage(): ReactNode {
-  const { user, hasPermission, hasAnyPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { user, hasPermission } = usePermissions();
 
-  const canVer = isSuperAdmin || isAdmin || hasAnyPermission(['vale:ver', 'vale:separar', 'vale:entregar']);
-  const canSeparar = isSuperAdmin || isAdmin || hasPermission('vale:separar');
-  const canEntregar = isSuperAdmin || isAdmin || hasPermission('vale:entregar');
-  const canEditar = isSuperAdmin || isAdmin || hasPermission('vale:editar');
-  const canCancelar = isSuperAdmin || isAdmin || hasPermission('vale:cancelar');
-  const canRetroceder = isSuperAdmin || isAdmin || hasPermission('vale:retroceder');
+  const canVer = hasPermission('vale:ver');
+  const canSeparar = hasPermission('vale:separar');
+  const canEntregar = hasPermission('vale:entregar');
+  const canEditar = hasPermission('vale:editar');
+  const canCancelar = hasPermission('vale:cancelar');
+  const canRetroceder = hasPermission('vale:retroceder');
+
+  const canInteract = canSeparar || canEntregar;
 
   // Desactivación / Atenuación visual de bloques por alcance asignado
   const { isBotaDisabled, isAccesoriosDisabled, isOtroDisabled } = useMemo(
@@ -112,16 +114,31 @@ export function ValesAlmacenPage(): ReactNode {
     return classifyVales(itemsAlmacen);
   }, [itemsAlmacen]);
 
+  // Verificador estricto de si un vale es operable en almacén por el usuario según su estado y alcance
+  const isValeOperable = useCallback(
+    (v: ValeItem): boolean => {
+      if (!canOperateValeItem(user, v)) return false;
+      if (v.estado === 'PENDIENTE') return canSeparar;
+      if (v.estado === 'SEPARADO') return canEntregar;
+      return false;
+    },
+    [user, canSeparar, canEntregar],
+  );
+
   // ─── Handlers de selección por bloque ─────────────────────────────────────
   const handleToggleBotaId = (id: number) => {
+    const item = botaItems.find((i) => i.id === id);
+    if (!item || !isValeOperable(item)) return;
     setSelectedBotaIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((it) => it !== id) : [...prev, id],
     );
   };
 
   const handleToggleAccesoriosId = (id: number) => {
+    const item = accesoriosItems.find((i) => i.id === id);
+    if (!item || !isValeOperable(item)) return;
     setSelectedAccesoriosIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((it) => it !== id) : [...prev, id],
     );
   };
 
@@ -131,7 +148,7 @@ export function ValesAlmacenPage(): ReactNode {
       return;
     }
     const ids = botaItems
-      .filter((i) => i.estado === 'PENDIENTE' || i.estado === 'SEPARADO')
+      .filter((i) => isValeOperable(i))
       .map((i) => i.id);
     setSelectedBotaIds(ids);
   };
@@ -142,7 +159,7 @@ export function ValesAlmacenPage(): ReactNode {
       return;
     }
     const ids = accesoriosItems
-      .filter((i) => i.estado === 'PENDIENTE' || i.estado === 'SEPARADO')
+      .filter((i) => isValeOperable(i))
       .map((i) => i.id);
     setSelectedAccesoriosIds(ids);
   };
@@ -384,7 +401,8 @@ export function ValesAlmacenPage(): ReactNode {
         onToggleAccesoriosId={handleToggleAccesoriosId}
         onToggleAllBota={handleToggleAllBota}
         onToggleAllAccesorios={handleToggleAllAccesorios}
-        allowSelection={true}
+        allowSelection={canInteract}
+        isItemOperable={isValeOperable}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
         isOtroDisabled={isOtroDisabled}
@@ -450,9 +468,17 @@ export function ValesAlmacenPage(): ReactNode {
         departamentosVale={departamentosVale}
         onCatalogosChanged={reloadCatalogos}
         onSuccess={(saved) => {
-          showFeedback('success', `Vale ${saved?.folio ?? ''} actualizado correctamente.`);
-          if (saved?.id) {
-            triggerHighlight(saved.id);
+          const items = Array.isArray(saved) ? saved : saved ? [saved] : [];
+          const folios = items.map((i) => i.folio).join(', ');
+          showFeedback(
+            'success',
+            items.length > 1
+              ? `${items.length} vales registrados correctamente.`
+              : `Vale ${folios} registrado correctamente.`,
+          );
+          const ids = items.map((i) => i.id);
+          if (ids.length > 0) {
+            triggerHighlight(ids);
           }
           void reload(true);
         }}

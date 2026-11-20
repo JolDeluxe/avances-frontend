@@ -3,6 +3,8 @@ import type {
   EstadoUsuario,
   TipoSurtidoAlmacen,
   TipoMaterialAuditor,
+  AreaValeAuth,
+  DepartamentoValeCatalogSimple,
 } from '../types/users.types';
 
 export function UserStatusBadge({ estado }: { estado: EstadoUsuario }): ReactNode {
@@ -121,6 +123,86 @@ export function UserSegmentacionBadge({
 
   if (labels.length === 0) {
     return <span className="text-text-muted text-xs">—</span>;
+  }
+
+  return (
+    <ul className="space-y-0.5 py-1 text-xs">
+      {labels.map((lbl) => (
+        <li
+          key={lbl}
+          className="flex items-center gap-1.5 text-text-primary font-medium leading-tight"
+        >
+          <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+          <span>{lbl}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function UserValesBadge({
+  areasVale,
+  departamentosValeAsignados,
+  rolCodigo,
+}: {
+  areasVale?: AreaValeAuth[];
+  departamentosValeAsignados?: DepartamentoValeCatalogSimple[];
+  rolCodigo?: string;
+}): ReactNode {
+  const code = (rolCodigo || '').toUpperCase();
+
+  const getCleanLabels = (): string[] => {
+    if (code === 'SUPER_ADMIN') {
+      return ['Acceso Total'];
+    }
+
+    if (code === 'ADMIN') {
+      return ['Vales Depto.'];
+    }
+
+    if (code === 'AUDITOR') {
+      return ['Auditoría / Descuento'];
+    }
+
+    if (code === 'REGISTRADOR') {
+      return ['Registro de Vales'];
+    }
+
+    if (code === 'ALMACENISTA') {
+      const labels: string[] = [];
+      const areas = areasVale ?? [];
+      const deptos = departamentosValeAsignados ?? [];
+
+      const hasBota = areas.includes('BOTA');
+      const hasAcc = areas.includes('ACCESORIOS');
+      const hasOtro = areas.includes('OTRO');
+
+      if (hasBota && hasAcc && hasOtro) {
+        labels.push('Todas las áreas');
+      } else {
+        if (hasBota) labels.push('Área BOTA');
+        if (hasAcc) labels.push('Área ACCESORIOS');
+        if (hasOtro) labels.push('Área OTRO');
+
+        deptos.forEach((d) => {
+          labels.push(`Depto. ${d.nombre}`);
+        });
+      }
+
+      return labels;
+    }
+
+    return [];
+  };
+
+  const labels = getCleanLabels();
+
+  if (labels.length === 0) {
+    return (
+      <span className="text-text-muted text-xs" title="Sin alcance asignado a vales">
+        —
+      </span>
+    );
   }
 
   return (

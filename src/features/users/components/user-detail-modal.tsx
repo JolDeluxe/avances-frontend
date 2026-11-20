@@ -162,10 +162,10 @@ export function UserDetailModal({
           <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-3 border-b border-border/60 gap-2">
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
-                Segmentación Operativa
+                Segmentación Listados
               </h4>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Alcance de materiales y operaciones asignadas
+                Alcance de frentes y materiales de Listados asignados
               </p>
             </div>
             <div>
@@ -261,21 +261,45 @@ export function UserDetailModal({
           </div>
 
           {/* Alcance Operativo de Vales */}
-          {user.rol?.codigo === 'ALMACENISTA' && (
-            <div className="pt-3 border-t border-border/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
-                  <Icon name="receipt_long" size="xs" className="text-text-muted" />
-                  Alcance Operativo de Vales
-                </span>
-                <span className="text-[11px] font-medium text-text-muted">
-                  {(user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0
-                    ? 'Sin alcance asignado'
-                    : `${user.areasVale?.length ?? 0} área(s) · ${user.departamentosValeAsignados?.length ?? 0} depto(s)`}
-                </span>
-              </div>
+          <div className="pt-3 border-t border-border/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+                <Icon name="receipt_long" size="xs" className="text-text-muted" />
+                Alcance Operativo de Vales
+              </span>
+              <span className="text-[11px] font-medium text-text-muted">
+                {user.rol?.codigo === 'SUPER_ADMIN'
+                  ? 'Acceso global (todas las áreas)'
+                  : user.rol?.codigo === 'ADMIN'
+                  ? 'Acceso departamental'
+                  : user.rol?.codigo === 'AUDITOR'
+                  ? 'Auditoría y Descuento'
+                  : user.rol?.codigo === 'REGISTRADOR'
+                  ? 'Registro y Captura'
+                  : (user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0
+                  ? 'Sin alcance asignado'
+                  : `${user.areasVale?.length ?? 0} área(s) · ${user.departamentosValeAsignados?.length ?? 0} depto(s)`}
+              </span>
+            </div>
 
-              {(user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0 ? (
+            {user.rol?.codigo === 'SUPER_ADMIN' ? (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-text-secondary">
+                Acceso global sin restricciones a todas las áreas y departamentos de Vales de Materia Prima.
+              </div>
+            ) : user.rol?.codigo === 'ADMIN' ? (
+              <div className="p-2.5 rounded-lg bg-cuadra-miel/10 border border-cuadra-miel/25 text-xs text-text-secondary">
+                Acceso administrativo total para los vales del departamento <strong>{user.departamento?.nombre || 'asignado'}</strong>.
+              </div>
+            ) : user.rol?.codigo === 'AUDITOR' ? (
+              <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-xs text-text-secondary">
+                Autorizado para auditar y validar el descuento contable de vales entregados de su departamento.
+              </div>
+            ) : user.rol?.codigo === 'REGISTRADOR' ? (
+              <div className="p-2.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-xs text-text-secondary">
+                Autorizado para la captura, edición y registro de nuevos vales para su departamento.
+              </div>
+            ) : user.rol?.codigo === 'ALMACENISTA' ? (
+              (user.areasVale?.length ?? 0) === 0 && (user.departamentosValeAsignados?.length ?? 0) === 0 ? (
                 <div className="p-2.5 rounded-lg bg-app-surface-muted/40 border border-border/60 text-xs text-text-muted italic">
                   Sin áreas ni departamentos de Vales autorizados (política deny-by-default).
                 </div>
@@ -309,9 +333,13 @@ export function UserDetailModal({
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+              )
+            ) : (
+              <div className="p-2.5 rounded-lg bg-app-surface-muted/40 border border-border/60 text-xs text-text-muted italic">
+                Visibilidad sujeta a los permisos base del rol y departamento organizacional.
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Credentials & Password Reveal Section */}

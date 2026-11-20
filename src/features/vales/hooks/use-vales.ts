@@ -216,16 +216,25 @@ export function useVales(
     fetchRef.current = fetchVales;
   }, [fetchVales]);
 
+  // Debounce para refetches en background tras ráfagas de eventos SSE (ej. guardado masivo en lote)
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleFetch = useCallback(() => {
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+    fetchDebounceRef.current = setTimeout(() => {
+      void fetchRef.current(true);
+    }, 120);
+  }, []);
+
   /**
    * Listener SSE:
    * - Actualiza in-place el estado del vale para que el ícono cambie de inmediato.
    * - Activa la animación correspondiente (amarillo, verde o morado).
    * - Si la transición es de entrega o descuento (que retira la fila de la vista actual),
-   *   pospone el refetch silencioso 2000ms para que el parpadeo se vea completo.
+   *   pospone el refetch silencioso para que el parpadeo se vea completo.
    */
   const handleStreamEvent = useCallback(
     (evento: ValeEventoPayload) => {
-      // 1. Evento masivo por lote
+      // 1. Evento masivo por lote (VALES_LOTE_OPERADO)
       if (evento.tipo === 'VALES_LOTE_OPERADO' && evento.valeIds && evento.valeIds.length > 0) {
         const loteIds = evento.valeIds;
         const nuevoEstado = evento.estadoNuevo;
@@ -240,20 +249,27 @@ export function useVales(
 
         if (nuevoEstado === 'DESCONTADO') {
           triggerDescontando(loteIds, () => {
-            void fetchRef.current(true);
+            scheduleFetch();
           });
         } else if (nuevoEstado === 'ENTREGADO') {
           triggerEntregando(loteIds, () => {
-            void fetchRef.current(true);
+            scheduleFetch();
           });
         } else {
           triggerHighlight(loteIds);
-          void fetchRef.current(true);
+          scheduleFetch();
         }
         return;
       }
 
-      // 2. Evento individual
+      // 2. Creación individual (VALE_CREADO)
+      if (evento.tipo === 'VALE_CREADO' && evento.valeId) {
+        triggerHighlight(evento.valeId);
+        scheduleFetch();
+        return;
+      }
+
+      // 3. Evento individual de transición de estado / edición
       if (evento.valeId) {
         const id = evento.valeId;
         const nuevoEstado = evento.estadoNuevo;
@@ -312,7 +328,7 @@ export function useVales(
 
         if (evento.tipo === 'VALE_DESCONTADO' || nuevoEstado === 'DESCONTADO') {
           triggerDescontando(id, () => {
-            void fetchRef.current(true);
+            scheduleFetch();
           });
         } else if (
           evento.tipo === 'VALE_ENTREGADO' ||
@@ -320,18 +336,18 @@ export function useVales(
           nuevoEstado === 'ENTREGADO'
         ) {
           triggerEntregando(id, () => {
-            void fetchRef.current(true);
+            scheduleFetch();
           });
         } else {
           triggerHighlight(id);
-          void fetchRef.current(true);
+          scheduleFetch();
         }
         return;
       }
 
-      void fetchRef.current(true);
+      scheduleFetch();
     },
-    [triggerHighlight, triggerEntregando, triggerDescontando],
+    [scheduleFetch, triggerHighlight, triggerEntregando, triggerDescontando],
   );
 
   useValesStreamListener(handleStreamEvent);
