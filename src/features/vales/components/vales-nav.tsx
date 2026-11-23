@@ -3,6 +3,7 @@ import { NavLink } from 'react-router';
 import { ROUTES } from '@/app/router/route-paths';
 import { cn } from '@/lib/utils/cn';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useLayoutUI } from '@/layouts/use-layout-ui';
 
 interface TabItem {
   id: string;
@@ -49,6 +50,7 @@ const ALL_TABS: Record<string, TabItem> = {
  */
 export function ValesNav({ className }: { className?: string }): ReactNode {
   const { hasPermission, rol, isAdmin } = usePermissions();
+  const { valesAuditoriaCount } = useLayoutUI();
 
   const canVer = hasPermission('vale:ver');
   const canCrear = hasPermission('vale:crear');
@@ -112,7 +114,17 @@ export function ValesNav({ className }: { className?: string }): ReactNode {
         )
       }
     >
-      {tab.label}
+      <span className="inline-flex items-center gap-1.5">
+        <span>{tab.label}</span>
+        {tab.id === 'auditoria' && valesAuditoriaCount > 0 && (
+          <span
+            className="inline-flex items-center justify-center bg-danger text-white text-[10px] font-bold rounded-full min-w-4 h-4 px-1 shadow-2xs leading-none"
+            title={`${valesAuditoriaCount} listos para descontar en ERP`}
+          >
+            {valesAuditoriaCount > 10 ? '+10' : valesAuditoriaCount}
+          </span>
+        )}
+      </span>
     </NavLink>
   );
 

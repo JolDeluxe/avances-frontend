@@ -31,6 +31,11 @@ export const listadosApi = {
     return httpClient.get<ApiResponse<number[]>>('/listados/anios');
   },
 
+  getAuditoriaCount: async (): Promise<number> => {
+    const response = await httpClient.get<ApiResponse<{ count: number }>>('/listados/auditoria/count');
+    return response.data?.count ?? 0;
+  },
+
   // ─── Creación y edición (solo en PENDIENTE) ───────────────────────────────
 
   createListado: async (input: CreateListadoInput): Promise<ApiResponse<ListadoItem>> => {

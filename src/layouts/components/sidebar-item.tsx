@@ -25,6 +25,8 @@ export function SidebarItem({ item }: SidebarItemProps) {
   );
 
   const [isOpen, setIsOpen] = useState(isActiveChild);
+  const hasBadge = typeof item.badgeCount === 'number' && item.badgeCount > 0;
+  const badgeLabel = item.badgeCount && item.badgeCount > 10 ? '+10' : item.badgeCount?.toString();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -69,6 +71,24 @@ export function SidebarItem({ item }: SidebarItemProps) {
           >
             {item.name}
           </span>
+
+          {hasBadge && sidebarExpanded && (
+            <span
+              className="ml-auto inline-flex items-center justify-center bg-danger text-white text-[11px] font-bold rounded-full min-w-5 h-5 px-1.5 shadow-xs shrink-0"
+              title={`${item.badgeCount} listos para descontar en ERP`}
+            >
+              {badgeLabel}
+            </span>
+          )}
+
+          {hasBadge && !sidebarExpanded && (
+            <span
+              className="absolute top-1.5 right-2 inline-flex items-center justify-center bg-danger text-white text-[10px] font-bold rounded-full min-w-4 h-4 px-1 shadow-xs leading-none"
+              title={`${item.badgeCount} listos para descontar en ERP`}
+            >
+              {badgeLabel}
+            </span>
+          )}
 
           {hasChildren && sidebarExpanded && (
             <Icon

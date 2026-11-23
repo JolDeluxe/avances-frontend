@@ -1,4 +1,5 @@
 import { createContext, useState, type ReactNode } from 'react';
+import { useAuditorCounts } from './hooks/use-auditor-counts';
 
 export interface LayoutUIState {
   /** Sidebar expandido (desktop) */
@@ -11,6 +12,10 @@ export interface LayoutUIState {
   /** Modo pantalla completa para proyección en planta (oculta layout) */
   fullscreenMode: boolean;
   setFullscreenMode: (value: boolean) => void;
+  /** Contadores de auditoría (registros listos para descontar en ERP) */
+  listadosAuditoriaCount: number;
+  valesAuditoriaCount: number;
+  refreshAuditorCounts: () => Promise<void>;
 }
 
 // oxlint-disable-next-line react/only-export-components
@@ -27,6 +32,8 @@ export function LayoutUIProvider({ children }: { children: ReactNode }) {
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
+
+  const { listadosAuditoriaCount, valesAuditoriaCount, refreshAuditorCounts } = useAuditorCounts();
 
   const toggleSidebar = () => {
     setSidebarExpanded((prev: boolean) => {
@@ -50,6 +57,9 @@ export function LayoutUIProvider({ children }: { children: ReactNode }) {
         closeMobileMenu: () => setMobileMenuOpen(false),
         fullscreenMode,
         setFullscreenMode,
+        listadosAuditoriaCount,
+        valesAuditoriaCount,
+        refreshAuditorCounts,
       }}
     >
       {children}

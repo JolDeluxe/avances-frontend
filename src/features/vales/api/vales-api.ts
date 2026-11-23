@@ -46,6 +46,11 @@ export const valesApi = {
     );
   },
 
+  getAuditoriaCount: async (): Promise<number> => {
+    const data = await unwrap(httpClient.get<ApiResponse<{ count: number }>>('/vales/auditoria/count'));
+    return data.count;
+  },
+
   // ─── Creación y edición (solo en PENDIENTE) ───────────────────────────────
 
   createVale: async (input: CreateValeInput): Promise<ValeItem> => {

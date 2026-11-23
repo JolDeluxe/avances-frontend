@@ -28,7 +28,7 @@ function DashboardLayoutContent({
   const session = useAuthSession();
 
   const { can, rol } = usePermissions();
-  const { fullscreenMode } = useLayoutUI();
+  const { fullscreenMode, listadosAuditoriaCount, valesAuditoriaCount } = useLayoutUI();
 
   const user = userProp !== undefined ? userProp : session.user;
   const onLogout = onLogoutProp ?? session.logout;
@@ -41,6 +41,14 @@ function DashboardLayoutContent({
       return false;
     }
     return true;
+  }).map((item) => {
+    if (item.id === 'listados') {
+      return { ...item, badgeCount: listadosAuditoriaCount };
+    }
+    if (item.id === 'vales') {
+      return { ...item, badgeCount: valesAuditoriaCount };
+    }
+    return item;
   });
 
   // Diseño de layout unificado permanente (Sidebar + Navbar + Main + Footer)

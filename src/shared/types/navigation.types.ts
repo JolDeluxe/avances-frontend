@@ -29,4 +29,6 @@ export interface NavItem {
   divider?: boolean;
   /** Si true, este elemento es solo un separador visual */
   isDivider?: boolean;
+  /** Contador numérico para badges de alerta/notificación en el layout */
+  badgeCount?: number;
 }

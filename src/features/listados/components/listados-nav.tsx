@@ -2,6 +2,7 @@ import { NavLink } from 'react-router';
 import { ROUTES } from '@/app/router/route-paths';
 import { cn } from '@/lib/utils/cn';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useLayoutUI } from '@/layouts/use-layout-ui';
 
 interface TabItem {
   id: string;
@@ -48,6 +49,7 @@ const ALL_TABS: Record<string, TabItem> = {
  */
 export function ListadosNav({ className }: { className?: string }) {
   const { hasPermission, rol, isAdmin } = usePermissions();
+  const { listadosAuditoriaCount } = useLayoutUI();
 
   const canVer = hasPermission('listado:ver');
   const canCrear = hasPermission('listado:crear');
@@ -113,7 +115,17 @@ export function ListadosNav({ className }: { className?: string }) {
         )
       }
     >
-      {tab.label}
+      <span className="inline-flex items-center gap-1.5">
+        <span>{tab.label}</span>
+        {tab.id === 'auditoria' && listadosAuditoriaCount > 0 && (
+          <span
+            className="inline-flex items-center justify-center bg-danger text-white text-[10px] font-bold rounded-full min-w-4 h-4 px-1 shadow-2xs leading-none"
+            title={`${listadosAuditoriaCount} listos para descontar en ERP`}
+          >
+            {listadosAuditoriaCount > 10 ? '+10' : listadosAuditoriaCount}
+          </span>
+        )}
+      </span>
     </NavLink>
   );
 
