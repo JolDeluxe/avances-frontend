@@ -409,7 +409,7 @@ export function ValesAlmacenPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="No hay vales pendientes por separar o entregar en almacén."
+        emptyMessage="Sin vales en almacén"
         acciones={{
           onVerDetalle: handleOpenDetail,
           onEditar: handleOpenEdit,

@@ -309,7 +309,7 @@ export function MonitorPendientesPage(): ReactNode {
         highlightedListadoId={highlightedIds}
         entregandoListadoId={entregandoIds}
         descontandoListadoId={descontandoIds}
-        emptyMessage="Todos los listados de producción han sido completados y entregados."
+        emptyMessage="Todos los listados completados"
       />
     </div>
   );

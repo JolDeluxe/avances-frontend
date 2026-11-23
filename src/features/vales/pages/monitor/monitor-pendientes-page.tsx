@@ -287,7 +287,7 @@ export function MonitorValesPendientesPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="Todos los vales han sido completados."
+        emptyMessage="Todos los vales completados"
       />
     </div>
   );

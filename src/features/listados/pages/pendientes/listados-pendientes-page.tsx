@@ -769,7 +769,7 @@ export function ListadosPendientesPage(): ReactNode {
         isLoading={isLoading}
         page={pagination.page}
         limit={pagination.limit}
-        emptyMessage="No hay listados de Almacén MBC pendientes."
+        emptyMessage="Sin listados pendientes"
         frentesPermitidos={null}
         isBotaDisabled={false}
         isAccesoriosDisabled={false}

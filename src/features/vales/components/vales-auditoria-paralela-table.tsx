@@ -18,7 +18,7 @@ export function ValesAuditoriaParalelaTable(
       {...props}
       emptyMessage={
         props.emptyMessage ??
-        'No hay vales entregados a producción pendientes de descontar en sistema.'
+        'Sin vales por descontar'
       }
     />
   );

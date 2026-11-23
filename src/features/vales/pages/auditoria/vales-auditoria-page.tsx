@@ -355,7 +355,7 @@ export function ValesAuditoriaPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="No hay vales entregados a producción pendientes de descontar en sistema."
+        emptyMessage="Sin vales por descontar"
         acciones={{
           onVerDetalle: handleOpenDetail,
           onEditar: handleOpenEdit,

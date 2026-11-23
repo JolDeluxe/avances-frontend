@@ -454,7 +454,7 @@ export function ValesPendientesPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="No hay vales pendientes por completar."
+        emptyMessage="Sin vales pendientes"
         acciones={{
           onVerDetalle: handleOpenDetail,
           onEditar: handleOpenEdit,

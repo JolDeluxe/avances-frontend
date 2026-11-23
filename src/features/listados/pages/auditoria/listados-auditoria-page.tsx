@@ -503,7 +503,7 @@ export function ListadosAuditoriaPage(): ReactNode {
         selectedIndirectosIds={selectedIndirectosIds}
         onToggleSelectDirectos={handleToggleSelectDirectos}
         onToggleSelectIndirectos={handleToggleSelectIndirectos}
-        emptyMessage="No hay materiales entregados a producción pendientes de descontar en sistema."
+        emptyMessage="Sin listados por descontar"
         pagination={{
           currentPage: pagination.page,
           totalPages: pagination.totalPages,

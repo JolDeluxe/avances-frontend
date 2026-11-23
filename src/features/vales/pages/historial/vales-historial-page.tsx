@@ -413,7 +413,7 @@ export function ValesHistorialPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="No hay vales históricos registrados para el mes seleccionado."
+        emptyMessage="Sin vales en este mes"
         allowSelection={false}
         acciones={{
           onVerDetalle: handleOpenDetail,

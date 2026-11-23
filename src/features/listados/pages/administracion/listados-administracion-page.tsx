@@ -244,7 +244,7 @@ export function ListadosAdministracionPage(): ReactNode {
         highlightedListadoId={highlightedListadoId}
         entregandoListadoId={entregandoListadoId}
         entregandoFrente={entregandoFrente}
-        emptyMessage="No hay listados de Almacén MBC para mostrar."
+        emptyMessage="Sin listados pendientes"
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
         pagination={{

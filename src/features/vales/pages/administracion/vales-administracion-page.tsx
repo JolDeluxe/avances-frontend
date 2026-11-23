@@ -208,7 +208,7 @@ export function ValesAdministracionPage(): ReactNode {
         highlightedValeId={highlightedIds}
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
-        emptyMessage="No hay vales recién agregados pendientes de separación."
+        emptyMessage="Sin vales por separar"
         allowSelection={false}
         acciones={{
           onVerDetalle: handleOpenDetail,

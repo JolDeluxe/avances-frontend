@@ -700,7 +700,10 @@ function SeccionTablaArea({
                 colSpan={totalCols}
                 className="py-10 text-center text-text-muted text-xs sm:text-sm"
               >
-                {emptyLabel}
+                <div className="flex flex-col items-center justify-center gap-1.5">
+                  <Icon name="inbox" size="sm" className="opacity-40" />
+                  <span>{emptyLabel}</span>
+                </div>
               </td>
             </tr>
           )}
@@ -723,7 +726,7 @@ export function ValesPendientesParalelaTable({
   otroItems: otroItemsProp,
   formatFecha = defaultFormatFecha,
   isLoading,
-  emptyMessage = 'No hay vales de Almacén MBC para mostrar.',
+  emptyMessage = 'Sin vales pendientes',
   pagination,
   onPageChange,
   selectedBotaIds = [],
@@ -841,11 +844,11 @@ export function ValesPendientesParalelaTable({
 
   if (sortedBota.length === 0 && sortedAccesorios.length === 0 && sortedOtro.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-app-surface rounded-xl border border-border text-center px-4">
-        <p className="text-text-secondary font-medium">{emptyMessage}</p>
-        <p className="text-xs text-text-muted mt-1">
-          Los registros correspondientes aparecerán aquí divididos en Bota y Accesorios.
-        </p>
+      <div className="flex flex-col items-center justify-center py-16 bg-app-surface rounded-xl border border-border text-center px-4 gap-2.5">
+        <div className="w-12 h-12 rounded-full bg-app-surface-muted border border-border flex items-center justify-center text-text-muted">
+          <Icon name="inbox" size="md" />
+        </div>
+        <p className="text-sm font-medium text-text-secondary">{emptyMessage}</p>
       </div>
     );
   }

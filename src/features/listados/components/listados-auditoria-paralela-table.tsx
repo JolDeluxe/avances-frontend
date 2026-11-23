@@ -327,7 +327,7 @@ export function ListadosAuditoriaParalelaTable({
   formatFecha,
   isLoading,
   acciones,
-  emptyMessage = 'No hay listados entregados a producción para auditar.',
+  emptyMessage = 'Sin listados por descontar',
   isDirectosDisabled = false,
   isIndirectosDisabled = false,
   descontandoListadoId = null,
@@ -455,11 +455,11 @@ export function ListadosAuditoriaParalelaTable({
 
   if (sortedDirectos.length === 0 && sortedIndirectos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-app-surface rounded-xl border border-border text-center px-4">
-        <p className="text-text-secondary font-medium">{emptyMessage}</p>
-        <p className="text-xs text-text-muted mt-1">
-          Aquí aparecerán los listados entregados a producción divididos por Directos e Indirectos.
-        </p>
+      <div className="flex flex-col items-center justify-center py-16 bg-app-surface rounded-xl border border-border text-center px-4 gap-2.5">
+        <div className="w-12 h-12 rounded-full bg-app-surface-muted border border-border flex items-center justify-center text-text-muted">
+          <Icon name="inbox" size="md" />
+        </div>
+        <p className="text-sm font-medium text-text-secondary">{emptyMessage}</p>
       </div>
     );
   }
@@ -610,7 +610,10 @@ export function ListadosAuditoriaParalelaTable({
                   ) : (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-text-muted text-xs sm:text-sm">
-                        Sin listados de DIRECTOS
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          <Icon name="inbox" size="sm" className="opacity-40" />
+                          <span>Sin listados de DIRECTOS</span>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -733,7 +736,10 @@ export function ListadosAuditoriaParalelaTable({
                   ) : (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-text-muted text-xs sm:text-sm">
-                        Sin listados de INDIRECTOS
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          <Icon name="inbox" size="sm" className="opacity-40" />
+                          <span>Sin listados de INDIRECTOS</span>
+                        </div>
                       </td>
                     </tr>
                   )}

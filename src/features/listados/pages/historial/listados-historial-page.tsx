@@ -421,7 +421,7 @@ export function ListadosHistorialPage(): ReactNode {
         limit={pagination.limit}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
-        emptyMessage="No hay listados históricos registrados para el mes seleccionado."
+        emptyMessage="Sin listados en este mes"
         allowSelection={false}
         acciones={{
           onVerDetalle: handleOpenDetail,

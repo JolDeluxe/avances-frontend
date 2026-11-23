@@ -548,7 +548,7 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
               highlightedListadoId={highlightedListadosIds}
               entregandoListadoId={entregandoListadosIds}
               descontandoListadoId={descontandoListadosIds}
-              emptyMessage="Todos los listados de producción han sido completados y entregados."
+              emptyMessage="Todos los listados completados"
             />
           </div>
         ) : (
@@ -573,7 +573,7 @@ export function ProyeccionPage({ initialVista = 'listados' }: ProyeccionPageProp
               highlightedValeId={highlightedValesIds}
               entregandoValeId={entregandoValesIds}
               descontandoValeId={descontandoValesIds}
-              emptyMessage="Todos los vales de producción han sido completados y entregados."
+              emptyMessage="Todos los vales completados"
             />
           </div>
         )}
