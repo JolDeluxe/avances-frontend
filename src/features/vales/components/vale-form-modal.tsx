@@ -81,6 +81,12 @@ export function ValeFormModal({
   const [serieId, setSerieId] = useState<string>('');
   const [nuevaSerie, setNuevaSerie] = useState<string>('');
 
+  // Series disponibles en el formulario: se excluyen VAARC y VAARM
+  const seriesDisponibles = useMemo(
+    () => series.filter((s) => s.codigo !== 'VAARC' && s.codigo !== 'VAARM'),
+    [series]
+  );
+
   // Folio
   const [folio, setFolio] = useState<string>('');
   const folioInputRef = useRef<HTMLInputElement>(null);
@@ -151,7 +157,7 @@ export function ValeFormModal({
       setTieneHoraSolicitud(hasHora);
       setHoraSolicitud(hasHora ? horaExtraida : '');
     } else {
-      setSerieId(series.length === 1 ? String(series[0].id) : '');
+      setSerieId(seriesDisponibles.length === 1 ? String(seriesDisponibles[0].id) : '');
       setFolio('');
       setDepartamentoValeId('');
       setAreaSeleccionada(null);
@@ -159,7 +165,7 @@ export function ValeFormModal({
       setTieneHoraSolicitud(false);
       setHoraSolicitud('');
     }
-  }, [isOpen, valeToEdit, series]);
+  }, [isOpen, valeToEdit, seriesDisponibles]);
 
   useEffect(() => {
     if (isLineaOpen) {
@@ -334,7 +340,7 @@ export function ValeFormModal({
   // Re-iniciar campos del formulario preservando la fecha de solicitud
   const resetFormularioPreservandoFecha = () => {
     setFolio('');
-    setSerieId(series.length === 1 ? String(series[0].id) : '');
+    setSerieId(seriesDisponibles.length === 1 ? String(seriesDisponibles[0].id) : '');
     setModoNuevaSerie(false);
     setNuevaSerie('');
     setDepartamentoValeId('');
@@ -588,7 +594,8 @@ export function ValeFormModal({
               disabled={isFormDisabled}
             >
               <option value="">Selecciona serie...</option>
-              {series.map((s) => (
+              {/* Opciones VAARC y VAARM comentadas / excluidas del select de series */}
+              {seriesDisponibles.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.codigo}
                 </option>
