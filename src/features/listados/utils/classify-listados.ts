@@ -71,8 +71,10 @@ export type TipoOperacionFrente = 'almacen' | 'auditoria';
 
 /**
  * Evalúa si el usuario autenticado tiene alcance operativo sobre un frente de listado.
- * Réplica idéntica de ListadosLifecycleService en el backend.
- * Política: Deny-by-default. Sin excepciones de rol para ADMIN.
+ * Réplica idéntica de ScopeService.assertCanOperateFrente en el backend.
+ * - SUPER_ADMIN: alcance global.
+ * - Roles segmentados (ALMACENISTA / AUDITOR): requieren asignación explícita no vacía (Deny-by-default).
+ * - ADMIN: alcance operativo departamental sobre DIRECTOS, INDIRECTOS y BOLSAS dentro de su departamento.
  */
 export function canOperateListadoFrente(
   user: UsuarioAuth | null | undefined,
@@ -83,29 +85,32 @@ export function canOperateListadoFrente(
     return false; // Información no disponible -> Deny-by-default
   }
 
-  // 1. Alcance Ilimitado (Únicamente SUPER_ADMIN)
+  // 1. Alcance Ilimitado Global (Únicamente SUPER_ADMIN)
   if (user.rol === 'SUPER_ADMIN') {
     return true;
   }
 
-  // 2. Extraer asignación según dominio de la operación
+  // 2. Extraer asignación explícita según dominio de la operación
   const rawAsignacion =
     operacion === 'auditoria' ? user.tipoMaterialAuditor : user.tipoSurtidoAlmacen;
 
-  // Si no tiene asignación explícita -> Deny-by-default (nunca ilimitado)
-  if (!rawAsignacion || rawAsignacion.trim() === '') {
-    return false;
+  if (rawAsignacion && rawAsignacion.trim() !== '') {
+    const permitidos = rawAsignacion
+      .split(',')
+      .map((s) => s.trim().toUpperCase());
+
+    if (permitidos.includes('TODOS')) {
+      return true;
+    }
+
+    return permitidos.includes(tipoFrente.toUpperCase());
   }
 
-  const permitidos = rawAsignacion
-    .split(',')
-    .map((s) => s.trim().toUpperCase());
-
-  // 3. Alcance explícitamente ilimitado para esta operación ("TODOS")
-  if (permitidos.includes('TODOS')) {
+  // 3. Supervisión operativa departamental (ADMIN opera todos los frentes dentro de su departamento)
+  if (user.rol === 'ADMIN') {
     return true;
   }
 
-  // 4. Alcance restringido por frente específico
-  return permitidos.includes(tipoFrente.toUpperCase());
+  // 4. Sin asignación explícita en rol segmentado u otro rol -> Deny-by-default
+  return false;
 }

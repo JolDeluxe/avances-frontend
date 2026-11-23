@@ -63,8 +63,10 @@ export function ValesNav({ className }: { className?: string }): ReactNode {
 
   const isAlmacenista = rol === 'ALMACENISTA';
   const isAuditor = rol === 'AUDITOR';
+  const isOnlyAdmin = rol === 'ADMIN';
   const canVerAlmacen =
     !isAuditor &&
+    !isOnlyAdmin &&
     (isAlmacenista || isAdmin || rol === 'VISUALIZADOR' || hasPermission('vale:separar') || hasPermission('vale:entregar'));
   const canAuditar = !isAlmacenista && (canDescontar || isAuditor || isAdmin || rol === 'VISUALIZADOR');
 

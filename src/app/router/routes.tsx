@@ -318,7 +318,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.LISTADOS_ALMACEN,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.LISTADOS}
                   >
                     {withSuspense(<ListadosAlmacenPage />)}
@@ -408,7 +408,7 @@ export const routes: RouteObject[] = [
                 path: ROUTES.VALES_ALMACEN,
                 element: (
                   <RequireRole
-                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
+                    allowedRoles={['SUPER_ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.VALES}
                   >
                     <RequirePermission

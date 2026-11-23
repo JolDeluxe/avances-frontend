@@ -62,8 +62,10 @@ export function ListadosNav({ className }: { className?: string }) {
 
   const isAlmacenista = rol === 'ALMACENISTA';
   const isAuditor = rol === 'AUDITOR';
+  const isOnlyAdmin = rol === 'ADMIN';
   const canVerAlmacen =
     !isAuditor &&
+    !isOnlyAdmin &&
     (isAlmacenista || isAdmin || rol === 'VISUALIZADOR' || hasPermission('listado:separar') || hasPermission('listado:entregar'));
   const canAuditar = !isAlmacenista && (canDescontar || isAuditor || isAdmin || rol === 'VISUALIZADOR');
 
