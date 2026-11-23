@@ -154,7 +154,7 @@ export function ValeAccionModal({
                 <Icon name="done_all" size="sm" className="text-purple-600 shrink-0 mt-0.5" />
                 <span>
                   Esta acción confirma en la aplicación que el descuento ya fue realizado
-                  externamente en el ERP.
+                  externamente en el sistema.
                 </span>
               </div>
             </div>
