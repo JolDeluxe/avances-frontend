@@ -127,7 +127,7 @@ function IndicadorProgresoVale({ estado }: { estado?: EstadoVale }): ReactNode {
   if (estado === 'CANCELADO') {
     return (
       <span className="inline-flex items-center justify-center select-none" title="Cancelado">
-        <Icon name="cancel" size="15px" className="text-danger shrink-0" />
+        <Icon name="close" size="16px" weight={700} className="text-danger shrink-0" />
       </span>
     );
   }
@@ -224,7 +224,7 @@ function MenuAccionesFila({
     Boolean(acciones.canRetroceder && acciones.onRetroceder && canOperate) &&
     (row.estado === 'SEPARADO' || row.estado === 'ENTREGADO');
   const canEditar =
-    Boolean(acciones.canEditar && acciones.onEditar) && !isTerminal;
+    Boolean(acciones.canEditar && acciones.onEditar) && !isCancelado;
   const canCancelar =
     Boolean(acciones.canCancelar && acciones.onCancelar) && !isTerminal;
   const canSeparar =
@@ -275,7 +275,7 @@ function MenuAccionesFila({
               <span>Ver detalles</span>
             </button>
 
-            {canEditar && !isTerminal && (
+            {canEditar && (
               <button
                 type="button"
                 onClick={() => {

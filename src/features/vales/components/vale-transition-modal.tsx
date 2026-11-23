@@ -1,8 +1,9 @@
-import { useState, useEffect, type ReactNode, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type ReactNode, type FormEvent } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Icon } from '@/components/ui/icon';
 import { ValeStatusBadge } from '@/components/ui/status-badge';
@@ -21,9 +22,25 @@ export interface ValeTransitionModalProps {
 
 const RETROCESO_TARGET: Partial<Record<EstadoVale, EstadoVale>> = {
   DESCONTADO: 'ENTREGADO',
-  ENTREGADO: 'SEPARADO',
+  ENTREGADO: 'PENDIENTE',
   SEPARADO: 'PENDIENTE',
 };
+
+const MOTIVOS_RETROCESO_VALE = [
+  'Error en folio o datos del vale',
+  'Material faltante en almacén / Surtido incompleto',
+  'Material defectuoso o no conforme',
+  'Cambio de orden o lote en producción',
+  'Vale duplicado o generado por error',
+  'Ajuste solicitado por encargado de piso',
+];
+
+const MOTIVOS_CANCELACION_VALE = [
+  'Vale cancelado por cambio en producción',
+  'Vale duplicado / Folio erróneo',
+  'Material no requerido en piso',
+  'Error de captura en serie o departamento',
+];
 
 const ACTION_CONFIG: Record<
   TransitionAction,
@@ -36,10 +53,10 @@ const ACTION_CONFIG: Record<
   }
 > = {
   retroceder: {
-    title: 'Retroceder Estado del Vale (1 Paso)',
+    title: 'Retroceder a Materiales Pendientes',
     description:
-      'Esta acción regresa el vale exactamente al estado inmediato anterior dentro del flujo operativo. Debe indicar el motivo del retroceso.',
-    confirmLabel: 'Retroceder Estado',
+      'Esta acción reinicia el estado del vale seleccionado y lo manda directamente al inicio como Materiales Pendientes. Debe indicar el motivo del retroceso.',
+    confirmLabel: 'Retroceder a Pendientes',
     confirmVariant: 'warning',
     confirmIcon: 'undo',
   },
@@ -54,7 +71,7 @@ const ACTION_CONFIG: Record<
 };
 
 /**
- * Modal para transiciones que requieren motivo obligatorio (5–500 chars): Retroceder y Cancelar.
+ * Modal para transiciones de Vale que requieren motivo obligatorio: Retroceder y Cancelar.
  */
 export function ValeTransitionModal({
   isOpen,
@@ -63,25 +80,35 @@ export function ValeTransitionModal({
   vale,
   action,
 }: ValeTransitionModalProps): ReactNode {
-  const [motivo, setMotivo] = useState<string>('');
+  const [motivoSelect, setMotivoSelect] = useState<string>('');
+  const [motivoDetalle, setMotivoDetalle] = useState<string>('');
   const [confirmFolio, setConfirmFolio] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setMotivo('');
+      setMotivoSelect('');
+      setMotivoDetalle('');
       setConfirmFolio('');
       setIsSubmitting(false);
       setError(null);
     }
   }, [isOpen, vale, action]);
 
-  if (!isOpen || !vale || !action) return null;
-
-  const config = ACTION_CONFIG[action];
+  const config = action ? ACTION_CONFIG[action] : null;
   const isCancel = action === 'cancelar';
-  const targetEstado = !isCancel ? RETROCESO_TARGET[vale.estado] : 'CANCELADO';
+  const targetEstado = vale && !isCancel ? RETROCESO_TARGET[vale.estado] : 'CANCELADO';
+  const motivosPredefinidos = isCancel ? MOTIVOS_CANCELACION_VALE : MOTIVOS_RETROCESO_VALE;
+
+  const motivoFinal = useMemo(() => {
+    if (motivoSelect === 'OTRO') {
+      return motivoDetalle.trim();
+    }
+    return motivoSelect;
+  }, [motivoSelect, motivoDetalle]);
+
+  if (!isOpen || !vale || !action || !config) return null;
 
   // Si se cancela y ya está en SEPARADO, requiere escribir el folio
   const requiereConfirmacionFolio = isCancel && vale.estado === 'SEPARADO';
@@ -89,8 +116,10 @@ export function ValeTransitionModal({
     !requiereConfirmacionFolio ||
     confirmFolio.trim().toUpperCase() === vale.folio.trim().toUpperCase();
 
-  const motivoTrimmed = motivo.trim();
-  const isMotivoValid = motivoTrimmed.length >= 5 && motivoTrimmed.length <= 500;
+  const isMotivoValid =
+    motivoSelect === 'OTRO'
+      ? motivoDetalle.trim().length >= 5 && motivoDetalle.trim().length <= 500
+      : Boolean(motivoSelect);
   const isValid = isMotivoValid && isFolioConfirmed;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -100,7 +129,7 @@ export function ValeTransitionModal({
       return;
     }
     if (!isMotivoValid) {
-      setError('El motivo es obligatorio y debe tener entre 5 y 500 caracteres.');
+      setError('Debes seleccionar o especificar un motivo válido (mínimo 5 caracteres).');
       return;
     }
 
@@ -110,9 +139,9 @@ export function ValeTransitionModal({
     try {
       let updated: ValeItem;
       if (isCancel) {
-        updated = await valesApi.cancelarVale(vale.id, { motivo: motivoTrimmed });
+        updated = await valesApi.cancelarVale(vale.id, { motivo: motivoFinal });
       } else {
-        updated = await valesApi.retrocederVale(vale.id, { motivo: motivoTrimmed });
+        updated = await valesApi.retrocederVale(vale.id, { motivo: motivoFinal });
       }
       onSuccess(updated);
       onClose();
@@ -131,11 +160,11 @@ export function ValeTransitionModal({
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
         <ModalBody className="space-y-4">
           {/* Info del vale afectado */}
-          <div className="p-3.5 rounded-xl bg-cuadra-arena/30 border border-border flex items-center justify-between gap-3">
+          <div className="p-3 rounded-xl bg-cuadra-arena/30 border border-border flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {vale.serie?.codigo && (
                 <div className="space-y-0.5">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted font-bold block">
                     Serie
                   </span>
                   <span className="font-mono font-bold text-sm text-text-secondary block">
@@ -144,7 +173,7 @@ export function ValeTransitionModal({
                 </div>
               )}
               <div className="min-w-0 space-y-0.5">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                <span className="text-[10px] uppercase tracking-wider text-text-muted font-bold block">
                   Vale
                 </span>
                 <span className="font-mono font-black text-base text-text-primary tracking-wide block truncate">
@@ -158,15 +187,29 @@ export function ValeTransitionModal({
             </span>
           </div>
 
-          <p className="text-xs text-text-secondary">{config.description}</p>
+          <p className="text-xs text-text-secondary leading-relaxed">{config.description}</p>
 
           {/* Resumen visual de la transición */}
-          <div className="flex items-center justify-between px-3 py-2 bg-app-surface rounded-lg border border-border/60 text-xs">
-            <span className="font-medium text-text-secondary">Transición:</span>
-            <div className="flex items-center gap-2">
-              <ValeStatusBadge estado={vale.estado} />
-              <Icon name="arrow_forward" size="14px" className="text-text-muted" />
-              {targetEstado && <ValeStatusBadge estado={targetEstado} />}
+          <div className="p-3 bg-app-surface rounded-xl border border-border/80 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              <span>Transición de Estado</span>
+              {!isCancel && (
+                <span className="inline-flex items-center gap-1 text-warning-text font-medium">
+                  <Icon name="history" size="12px" />
+                  Reinicio a Pendientes
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-cuadra-arena/20 border border-border/40">
+              <div className="flex-1 min-w-0 flex items-center justify-center">
+                <ValeStatusBadge estado={vale.estado} className="shadow-2xs" />
+              </div>
+              <div className="flex items-center justify-center w-7 h-7 rounded-full bg-app-surface border border-border shadow-2xs shrink-0 text-text-muted">
+                <Icon name="arrow_forward" size="14px" />
+              </div>
+              <div className="flex-1 min-w-0 flex items-center justify-center">
+                {targetEstado && <ValeStatusBadge estado={targetEstado} className="shadow-2xs" />}
+              </div>
             </div>
           </div>
 
@@ -184,7 +227,7 @@ export function ValeTransitionModal({
                 </div>
               </div>
               <div className="space-y-1 pt-1">
-                <Label htmlFor="confirmFolio" className="text-2xs font-bold text-text-primary">
+                <Label htmlFor="confirmFolio" className="text-[10px] font-bold text-text-primary">
                   Escribe el folio para confirmar:
                 </Label>
                 <Input
@@ -200,35 +243,65 @@ export function ValeTransitionModal({
             </div>
           )}
 
-          {/* Campo de motivo */}
-          <div className="space-y-1.5">
-            <Label htmlFor="motivo">
-              Motivo <span className="text-danger">*</span>
+          {/* Campo de motivo con Select (y caja de texto únicamente si elige OTRO) */}
+          <div className="space-y-2">
+            <Label htmlFor="motivoSelect" className="text-xs font-semibold">
+              Motivo de la operación <span className="text-danger">*</span>
             </Label>
-            <Input
-              id="motivo"
-              multiline
-              textareaProps={{
-                id: 'motivo',
-                value: motivo,
-                onChange: (e) => setMotivo(e.target.value),
-                placeholder: 'Describe el motivo de la operación (mínimo 5 caracteres)...',
-                maxLength: 500,
-                rows: 3,
+
+            <Select
+              id="motivoSelect"
+              value={motivoSelect}
+              onChange={(e) => {
+                const val = e.target.value;
+                setMotivoSelect(val);
+                if (val !== 'OTRO') {
+                  setMotivoDetalle('');
+                }
               }}
-            />
-            <div className="flex items-center justify-between">
-              <span
-                className={`text-2xs ${
-                  motivoTrimmed.length > 500 ||
-                  (motivoTrimmed.length > 0 && motivoTrimmed.length < 5)
-                    ? 'text-danger'
-                    : 'text-text-muted'
-                }`}
-              >
-                {motivoTrimmed.length}/500 caracteres (mín. 5)
-              </span>
-            </div>
+              className="text-xs h-9"
+            >
+              <option value="">Selecciona un motivo...</option>
+              {motivosPredefinidos.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value="OTRO">Otro motivo (especificar)...</option>
+            </Select>
+
+            {motivoSelect === 'OTRO' && (
+              <div className="space-y-1 pt-1 animate-fadeIn">
+                <Label htmlFor="motivoDetalle" className="text-[11px] font-medium text-text-secondary">
+                  Describe el motivo específico <span className="text-danger">*</span>
+                </Label>
+                <Input
+                  id="motivoDetalle"
+                  multiline
+                  textareaProps={{
+                    id: 'motivoDetalle',
+                    value: motivoDetalle,
+                    onChange: (e) => setMotivoDetalle(e.target.value),
+                    placeholder: 'Describe detalladamente el motivo de la operación (mínimo 5 caracteres)...',
+                    maxLength: 500,
+                    rows: 2,
+                    autoFocus: true,
+                  }}
+                />
+                <div className="flex items-center justify-end text-[10px] text-text-muted">
+                  <span
+                    className={
+                      motivoDetalle.trim().length > 500 ||
+                      (motivoDetalle.trim().length > 0 && motivoDetalle.trim().length < 5)
+                        ? 'text-danger font-medium'
+                        : 'text-text-muted'
+                    }
+                  >
+                    {motivoDetalle.trim().length}/500 caracteres (mín. 5)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {error && (

@@ -132,6 +132,7 @@ export interface ListadosListResponse {
 
 export interface ListadoFilters {
   estado?: EstadoListado | string;
+  excludeEstado?: EstadoListado;
   lineaProduccionId?: number;
   departamentoId?: number;
   numeroListado?: string;

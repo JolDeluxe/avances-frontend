@@ -448,7 +448,6 @@ export function ValesPendientesPage(): ReactNode {
         onToggleAllAccesorios={handleToggleAllAccesorios}
         allowSelection={canInteract}
         isItemOperable={isValeOperable}
-        hideActions={!canInteract}
         isBotaDisabled={isBotaDisabled}
         isAccesoriosDisabled={isAccesoriosDisabled}
         isOtroDisabled={isOtroDisabled}
@@ -456,25 +455,21 @@ export function ValesPendientesPage(): ReactNode {
         entregandoValeId={entregandoIds}
         descontandoValeId={descontandoIds}
         emptyMessage="No hay vales pendientes por completar."
-        acciones={
-          canInteract
-            ? {
-                onVerDetalle: handleOpenDetail,
-                onEditar: handleOpenEdit,
-                onSeparar: (v) => handleOpenAccion(v, 'separar'),
-                onEntregar: (v) => handleOpenAccion(v, 'entregar'),
-                onDescontar: (v) => handleOpenAccion(v, 'descontar'),
-                onRetroceder: (v) => handleOpenRetroceder(v, false),
-                onCancelar: handleOpenCancelar,
-                canSeparar,
-                canEntregar,
-                canDescontar,
-                canRetroceder,
-                canEditar,
-                canCancelar,
-              }
-            : undefined
-        }
+        acciones={{
+          onVerDetalle: handleOpenDetail,
+          onEditar: handleOpenEdit,
+          onSeparar: (v) => handleOpenAccion(v, 'separar'),
+          onEntregar: (v) => handleOpenAccion(v, 'entregar'),
+          onDescontar: (v) => handleOpenAccion(v, 'descontar'),
+          onRetroceder: (v) => handleOpenRetroceder(v, false),
+          onCancelar: handleOpenCancelar,
+          canSeparar,
+          canEntregar,
+          canDescontar,
+          canRetroceder,
+          canEditar,
+          canCancelar,
+        }}
       />
 
       {/* Modales */}

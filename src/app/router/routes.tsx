@@ -142,22 +142,22 @@ function ListadosIndexRedirect() {
  * Componente de redirección de índice para el módulo Vales basado en permisos efectivos y rol.
  */
 function ValesIndexRedirect() {
-  const { rol, can, canAny } = usePermissions();
+  const { rol } = usePermissions();
   const session = useAuthSession();
 
   if (session.user?.usuario === 'admin' || rol === 'SUPER_ADMIN' || rol === 'ADMIN' || rol === 'VISUALIZADOR') {
     return <Navigate to={ROUTES.VALES_PENDIENTES} replace />;
   }
 
-  if (rol === 'REGISTRADOR' && canAny(PERMISOS.VALE_CREAR, PERMISOS.VALE_EDITAR)) {
+  if (rol === 'REGISTRADOR') {
     return <Navigate to={ROUTES.VALES_ADMINISTRACION} replace />;
   }
 
-  if (rol === 'AUDITOR' && can(PERMISOS.VALE_DESCONTAR)) {
+  if (rol === 'AUDITOR') {
     return <Navigate to={ROUTES.VALES_AUDITORIA} replace />;
   }
 
-  if (rol === 'ALMACENISTA' && canAny(PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR)) {
+  if (rol === 'ALMACENISTA') {
     return <Navigate to={ROUTES.VALES_ALMACEN} replace />;
   }
 
@@ -407,12 +407,17 @@ export const routes: RouteObject[] = [
               {
                 path: ROUTES.VALES_ALMACEN,
                 element: (
-                  <RequirePermission
-                    anyPermission={[PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR, PERMISOS.VALE_VER]}
+                  <RequireRole
+                    allowedRoles={['SUPER_ADMIN', 'ADMIN', 'ALMACENISTA', 'VISUALIZADOR']}
                     fallbackRoute={ROUTES.VALES}
                   >
-                    {withSuspense(<ValesAlmacenPage />)}
-                  </RequirePermission>
+                    <RequirePermission
+                      anyPermission={[PERMISOS.VALE_SEPARAR, PERMISOS.VALE_ENTREGAR, PERMISOS.VALE_VER]}
+                      fallbackRoute={ROUTES.VALES}
+                    >
+                      {withSuspense(<ValesAlmacenPage />)}
+                    </RequirePermission>
+                  </RequireRole>
                 ),
               },
               {

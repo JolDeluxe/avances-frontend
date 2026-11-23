@@ -122,6 +122,8 @@ export function ValesHistorialPage(): ReactNode {
   // Si hay término de búsqueda activo en la URL, se omite el filtro de fechas para buscar en TODO el registro histórico
   const isBuscandoGlobal = Boolean(searchParams.get('busqueda')?.trim());
 
+  const isCanceladoView = searchParams.get('estado') === 'CANCELADO';
+
   const {
     items,
     pagination,
@@ -141,6 +143,7 @@ export function ValesHistorialPage(): ReactNode {
     customLimit: 500,
     fixedFechaDesde: isBuscandoGlobal ? undefined : fechaDesdeCalculada,
     fixedFechaHasta: isBuscandoGlobal ? undefined : fechaHastaCalculada,
+    excludeEstado: 'CANCELADO',
   });
 
   const { series, departamentosVale, reloadCatalogos } = useDepartamentosVale();
@@ -194,10 +197,17 @@ export function ValesHistorialPage(): ReactNode {
     setAccionState({ isOpen: true, vale, accion });
   };
 
-  // Clasificación en BOTA, ACCESORIOS y OTRO
+  // Clasificación en BOTA, ACCESORIOS y OTRO (garantizando exclusión estricta de cancelados si no está activo el filtro)
+  const itemsFiltrados = useMemo(() => {
+    if (isCanceladoView) {
+      return items.filter((it) => it.estado === 'CANCELADO');
+    }
+    return items.filter((it) => it.estado !== 'CANCELADO');
+  }, [items, isCanceladoView]);
+
   const { botaItems, accesoriosItems, otroItems } = useMemo(() => {
-    return classifyVales(items);
-  }, [items]);
+    return classifyVales(itemsFiltrados);
+  }, [itemsFiltrados]);
 
   // ─── Sin permiso ──────────────────────────────────────────────────────────
   if (!canVer) {

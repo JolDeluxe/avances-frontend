@@ -157,9 +157,12 @@ export function ListadosHistorialPage(): ReactNode {
   // Si hay término de búsqueda activo en la URL, se omite el filtro de fechas para buscar en TODO el registro histórico
   const isBuscandoGlobal = Boolean(searchParams.get('numeroListado')?.trim());
 
+  const isCanceladoView = searchParams.get('estado') === 'CANCELADO';
+
   // Hook principal de listados:
   // - Si el usuario busca un número de listado: busca en TODO el registro histórico (sin limitar por fechas).
   // - Si no hay búsqueda: aplica el rango mensual seleccionado por defecto.
+  // - Los cancelados se excluyen siempre salvo que se active explícitamente el filtro estado=CANCELADO.
   const {
     items,
     pagination,
@@ -174,6 +177,7 @@ export function ListadosHistorialPage(): ReactNode {
     customLimit: 1000,
     fixedFechaDesde: isBuscandoGlobal ? undefined : fechaDesdeCalculada,
     fixedFechaHasta: isBuscandoGlobal ? undefined : fechaHastaCalculada,
+    excludeEstado: 'CANCELADO',
   });
 
   const { todasLasLineas, departamentos } = useLineasProduccion();
@@ -219,10 +223,17 @@ export function ListadosHistorialPage(): ReactNode {
     setIsTransitionOpen(true);
   };
 
-  // Clasificación dinámica en BOTA y ACCESORIOS
+  // Clasificación dinámica en BOTA y ACCESORIOS (garantizando exclusión estricta de cancelados si no está activo el filtro)
+  const itemsFiltrados = useMemo(() => {
+    if (isCanceladoView) {
+      return items.filter((it) => it.estado === 'CANCELADO');
+    }
+    return items.filter((it) => it.estado !== 'CANCELADO');
+  }, [items, isCanceladoView]);
+
   const { botaItems, accesoriosItems, noClasificados } = useMemo(() => {
-    return clasificarListadosPorArea(items, todasLasLineas);
-  }, [items, todasLasLineas]);
+    return clasificarListadosPorArea(itemsFiltrados, todasLasLineas);
+  }, [itemsFiltrados, todasLasLineas]);
 
   // ─── Sin permiso ──────────────────────────────────────────────────────────
   if (!canVer) {

@@ -59,18 +59,26 @@ export function ListadosNav({ className }: { className?: string }) {
   }
 
   const isAlmacenista = rol === 'ALMACENISTA';
-  const canAuditar = !isAlmacenista && (canDescontar || rol === 'AUDITOR' || isAdmin || rol === 'VISUALIZADOR');
+  const isAuditor = rol === 'AUDITOR';
+  const canVerAlmacen =
+    !isAuditor &&
+    (isAlmacenista || isAdmin || rol === 'VISUALIZADOR' || hasPermission('listado:separar') || hasPermission('listado:entregar'));
+  const canAuditar = !isAlmacenista && (canDescontar || isAuditor || isAdmin || rol === 'VISUALIZADOR');
 
   // Orden canónico basado en permisos efectivos:
   // - Agregar +: Solo si tiene permiso de crear
-  // - Almacén, Pendientes: Operativo / consulta
+  // - Almacén: Solo para almacén y administración (excluyendo estrictamente al auditor)
+  // - Pendientes: Operativo / consulta
   // - Auditoría: Solo para roles / permisos de auditoría (excluyendo almacenistas)
   // - Historial: Para roles con acceso a historial (excluyendo almacenistas)
   const tabIds: string[] = [];
   if (canCrear) {
     tabIds.push('administracion');
   }
-  tabIds.push('almacen', 'pendientes');
+  if (canVerAlmacen) {
+    tabIds.push('almacen');
+  }
+  tabIds.push('pendientes');
   if (canAuditar) {
     tabIds.push('auditoria');
   }

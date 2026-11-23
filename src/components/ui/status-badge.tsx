@@ -56,7 +56,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors',
+        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors whitespace-nowrap',
         resolved.className,
         className,
       )}
@@ -71,7 +71,7 @@ export function StatusBadge({
       ) : (
         <span className={cn('w-2 h-2 rounded-full shrink-0', resolved.dot)} />
       )}
-      <span>{label ?? resolved.label}</span>
+      <span className="whitespace-nowrap">{label ?? resolved.label}</span>
     </span>
   );
 }

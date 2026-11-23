@@ -139,6 +139,7 @@ export function useListados(options?: UseListadosOptions) {
     try {
       const filters: ListadoFilters = {
         estado,
+        excludeEstado: !estado ? excludeEstado : undefined,
         lineaProduccionId,
         departamentoId,
         numeroListado: numeroListado || undefined,

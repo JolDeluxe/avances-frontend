@@ -169,6 +169,7 @@ export interface ValeFilters {
   departamentoValeId?: number;
   area?: AreaVale;
   estado?: EstadoVale | string;
+  excludeEstado?: EstadoVale;
   fechaDesde?: string;
   fechaHasta?: string;
   busqueda?: string;

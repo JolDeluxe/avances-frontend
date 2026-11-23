@@ -74,7 +74,7 @@ export function ValeDetailModal({
   onClose,
   vale,
   onTransition,
-  onEdit,
+  onEdit: _onEdit,
   onValeUpdated,
   allowSeparar = true,
 }: ValeDetailModalProps): ReactNode {
@@ -149,15 +149,6 @@ export function ValeDetailModal({
     (data.estado === 'SEPARADO' && canRetroceder) ||
     (data.estado === 'ENTREGADO' && canRetroceder) ||
     (data.estado === 'DESCONTADO' && canRetrocederDescuento);
-
-  const canEdit =
-    canOperateThis && can(PERMISOS.VALE_EDITAR) && data.estado === 'PENDIENTE';
-
-  const canCancelarVale =
-    Boolean(onTransition) &&
-    canOperateThis &&
-    can(PERMISOS.VALE_CANCELAR) &&
-    (data.estado === 'PENDIENTE' || data.estado === 'SEPARADO');
 
   const handleSeparar = async () => {
     setIsOperating(true);
@@ -634,35 +625,7 @@ export function ValeDetailModal({
           <Button type="button" variant="cancelar" onClick={onClose} className="h-9 text-xs">
             Cerrar
           </Button>
-          {canCancelarVale && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onClose();
-                onTransition?.(data, 'cancelar');
-              }}
-              className="h-9 text-xs text-danger border-danger/40 hover:bg-danger/10 hover:border-danger/60"
-            >
-              <Icon name="block" size="xs" className="mr-1.5" />
-              Cancelar Vale
-            </Button>
-          )}
         </div>
-        {canEdit && onEdit && (
-          <Button
-            type="button"
-            variant="accion"
-            onClick={() => {
-              onClose();
-              onEdit(data);
-            }}
-            className="h-9 text-xs"
-          >
-            <Icon name="edit" size="xs" className="mr-1.5" />
-            Editar Vale
-          </Button>
-        )}
       </ModalFooter>
     </Modal>
   );

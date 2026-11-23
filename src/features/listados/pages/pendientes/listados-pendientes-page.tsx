@@ -181,7 +181,7 @@ export function ListadosPendientesPage(): ReactNode {
   };
 
   const handleOpenRetrocederFrente = (listado: ListadoItem, tipoFrente?: TipoFrenteMaterial, fromDetail = false) => {
-    if (!canInteract) return;
+    if (!canRetroceder) return;
     setSelectedListado(listado);
     setTransitionTipoFrente(tipoFrente);
     setTransitionAction('retroceder');
@@ -190,7 +190,7 @@ export function ListadosPendientesPage(): ReactNode {
   };
 
   const handleOpenCancelarListado = (listado: ListadoItem) => {
-    if (!canInteract) return;
+    if (!canCancelar) return;
     setSelectedListado(listado);
     setTransitionTipoFrente(undefined);
     setTransitionAction('cancelar');

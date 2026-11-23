@@ -54,6 +54,18 @@ export function ListadoFormModal({
   onSuccess,
 }: ListadoFormModalProps): ReactNode {
   const isEditing = Boolean(listado);
+  const isListadoDescontado = Boolean(
+    isEditing &&
+      listado &&
+      (listado.estado === 'DESCONTADO' ||
+        (listado.frentes &&
+          listado.frentes.length > 0 &&
+          listado.frentes.every((f) => f.estado === 'DESCONTADO'))),
+  );
+  const isListadoCancelado = Boolean(isEditing && listado && listado.estado === 'CANCELADO');
+  const isBloqueadoParaEdicion = isListadoDescontado || isListadoCancelado;
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Modo de registro: Individual vs Varios a la vez
   const [modoRegistro, setModoRegistro] = useState<ModoRegistro>('INDIVIDUAL');
@@ -72,8 +84,7 @@ export function ListadoFormModal({
   const [lineaProduccionId, setLineaProduccionId] = useState<number>(0);
   const numeroListadoInputRef = useRef<HTMLInputElement>(null);
 
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const isFormDisabled = isSubmitting || isBloqueadoParaEdicion;
 
   // ─── Líneas de producción disponibles ─────────────────────────────────────
   const lineasDisponibles = useMemo(() => {
@@ -418,7 +429,7 @@ export function ListadoFormModal({
           }}
           placeholder="Ej. LST-2026-001"
           className="font-mono uppercase"
-          disabled={isSubmitting}
+          disabled={isFormDisabled}
         />
         <p className="text-2xs text-text-muted">
           Identificador único del listado. No puede repetirse en el sistema.
@@ -434,7 +445,7 @@ export function ListadoFormModal({
           required
           value={fechaRequerida}
           onChange={(e) => setFechaRequerida(e.target.value)}
-          disabled={isSubmitting}
+          disabled={isFormDisabled}
         />
         <p className="text-2xs text-text-muted">
           Fecha en que se requiere el material para producción.
@@ -453,7 +464,7 @@ export function ListadoFormModal({
             setLineaProduccionId(val ? Number(val) : 0);
           }}
           error={!lineaProduccionId && isSubmitting}
-          disabled={isSubmitting}
+          disabled={isFormDisabled}
         >
           <option value="">Selecciona una línea...</option>
           {lineasDisponibles.map((l) => (
@@ -537,9 +548,27 @@ export function ListadoFormModal({
             className="flex flex-col flex-1 overflow-hidden"
           >
             <ModalBody className="space-y-4">
+              {isBloqueadoParaEdicion && (
+                <div className="flex items-start gap-2.5 p-3 rounded-lg border border-warning/30 bg-warning/10 text-warning-text text-xs">
+                  <Icon name="lock" size="18px" className="mt-0.5 shrink-0 text-warning" />
+                  <div className="space-y-1">
+                    <p className="font-semibold text-warning-text">
+                      {isListadoCancelado
+                        ? 'Listado Cancelado'
+                        : 'Listado Finalizado (Materiales Descontados)'}
+                    </p>
+                    <p className="text-2xs text-text-secondary leading-relaxed">
+                      {isListadoCancelado
+                        ? 'No se pueden modificar los datos de un listado que ha sido cancelado.'
+                        : 'Los materiales de este listado ya fueron descontados en el sistema. Para modificar sus datos, debe retroceder primero el descuento a PENDIENTE desde el módulo correspondiente.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-text-secondary -mt-2">
                 {isEditing
-                  ? 'Modifica los datos del listado. Solo es posible editar listados en estado PENDIENTE.'
+                  ? 'Modifica los datos del listado de material.'
                   : 'Registra un nuevo listado de material para la línea de producción indicada.'}
               </p>
 
@@ -556,7 +585,7 @@ export function ListadoFormModal({
               <Button type="button" variant="cancelar" onClick={handleRequestClose} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit" variant="guardar" disabled={isSubmitting}>
+              <Button type="submit" variant="guardar" disabled={isSubmitting || isBloqueadoParaEdicion}>
                 {isSubmitting ? (
                   <>
                     <Spinner size="18px" className="mr-2" />

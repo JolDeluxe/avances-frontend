@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Icon } from '@/components/ui/icon';
-import { FrenteStatusBadge } from '@/components/ui/status-badge';
+import { FrenteStatusBadge, ListadoStatusBadge } from '@/components/ui/status-badge';
 import { TIPO_FRENTE_CONFIG } from '@/config/status-config';
 import { listadosApi } from '../api/listados-api';
 import type { ListadoItem, TipoFrenteMaterial } from '../types/listados.types';
@@ -21,6 +21,22 @@ export interface ListadoTransitionModalProps {
   tipoFrente?: TipoFrenteMaterial;
   onSuccess: (updatedListado: ListadoItem) => void;
 }
+
+const MOTIVOS_RETROCESO_LISTADO = [
+  'Material faltante para completar el lote',
+  'Material o piel no cumple especificación de calidad',
+  'Ajuste en número de listado o componentes',
+  'Cambio de programación en línea de producción',
+  'Error en asignación o surtido de almacén',
+  'Pausa o reasignación de la orden de producción',
+];
+
+const MOTIVOS_CANCELACION_LISTADO = [
+  'Orden de producción cancelada',
+  'Listado duplicado o sustituido',
+  'Cambio mayor de modelo o ingeniería',
+  'Error de captura en listado o línea',
+];
 
 const ACTION_CONFIG: Record<
   TransitionAction,
@@ -51,10 +67,7 @@ const ACTION_CONFIG: Record<
 };
 
 /**
- * Modal para transiciones que requieren motivo obligatorio: Retroceder y Cancelar.
- *
- * El motivo es validado en frontend (1–500 chars) y también en backend.
- * En el caso de retroceder, la operación es por frente y requiere `tipoFrente`.
+ * Modal para transiciones de Listado que requieren motivo obligatorio: Retroceder y Cancelar.
  */
 export function ListadoTransitionModal({
   isOpen,
@@ -64,13 +77,16 @@ export function ListadoTransitionModal({
   tipoFrente: tipoFrenteProp,
   onSuccess,
 }: ListadoTransitionModalProps): ReactNode {
-  const [motivo, setMotivo] = useState<string>('');
+  const [motivoSelect, setMotivoSelect] = useState<string>('');
+  const [motivoDetalle, setMotivoDetalle] = useState<string>('');
   const [selectedFrente, setSelectedFrente] = useState<TipoFrenteMaterial | ''>('');
   const [confirmNumero, setConfirmNumero] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const config = ACTION_CONFIG[action];
+  const isRetroceder = action === 'retroceder';
+  const motivosPredefinidos = isRetroceder ? MOTIVOS_RETROCESO_LISTADO : MOTIVOS_CANCELACION_LISTADO;
 
   // Identificar si algún frente ya está en Separado en Almacén o entregado
   const tieneFrentesSeparados = useMemo(() => {
@@ -83,13 +99,16 @@ export function ListadoTransitionModal({
   const requiereConfirmacionNumero = action === 'cancelar' && tieneFrentesSeparados;
 
   // Identificar frentes elegibles para retroceder (estado SEPARADO o ENTREGADO)
-  const frentesElegibles = (listado?.frentes ?? []).filter(
-    (f) => f.estado === 'SEPARADO' || f.estado === 'ENTREGADO',
-  );
+  const frentesElegibles = useMemo(() => {
+    return (listado?.frentes ?? []).filter(
+      (f) => f.estado === 'SEPARADO' || f.estado === 'ENTREGADO',
+    );
+  }, [listado?.frentes]);
 
   useEffect(() => {
     if (isOpen && listado) {
-      setMotivo('');
+      setMotivoSelect('');
+      setMotivoDetalle('');
       setConfirmNumero('');
       setIsSubmitting(false);
       setError(null);
@@ -109,13 +128,23 @@ export function ListadoTransitionModal({
     }
   }, [isOpen, listado, tipoFrenteProp]);
 
+  const motivoFinal = useMemo(() => {
+    if (motivoSelect === 'OTRO') {
+      return motivoDetalle.trim();
+    }
+    return motivoSelect;
+  }, [motivoSelect, motivoDetalle]);
+
   if (!listado) return null;
 
-  const motivoTrimmed = motivo.trim();
-  const isRetroceder = action === 'retroceder';
   const hasValidFrente = !isRetroceder || Boolean(selectedFrente);
-  const isNumeroConfirmed = !requiereConfirmacionNumero || confirmNumero.trim() === listado.numeroListado.trim();
-  const isValid = motivoTrimmed.length >= 1 && motivoTrimmed.length <= 500 && hasValidFrente && isNumeroConfirmed;
+  const isNumeroConfirmed =
+    !requiereConfirmacionNumero || confirmNumero.trim() === listado.numeroListado.trim();
+  const isMotivoValid =
+    motivoSelect === 'OTRO'
+      ? motivoDetalle.trim().length >= 5 && motivoDetalle.trim().length <= 500
+      : Boolean(motivoSelect);
+  const isValid = isMotivoValid && hasValidFrente && isNumeroConfirmed;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -127,8 +156,8 @@ export function ListadoTransitionModal({
       setError(`Debes escribir exactamente el número de listado (${listado.numeroListado}) para confirmar la cancelación.`);
       return;
     }
-    if (!motivoTrimmed || motivoTrimmed.length > 500) {
-      setError('El motivo debe tener entre 1 y 500 caracteres.');
+    if (!isMotivoValid) {
+      setError('Debes seleccionar o especificar un motivo válido (mínimo 5 caracteres).');
       return;
     }
 
@@ -140,10 +169,10 @@ export function ListadoTransitionModal({
       if (isRetroceder) {
         res = await listadosApi.retroceder(listado.id, {
           tipoFrente: selectedFrente as TipoFrenteMaterial,
-          motivo: motivoTrimmed,
+          motivo: motivoFinal,
         });
       } else {
-        res = await listadosApi.cancelar(listado.id, { motivo: motivoTrimmed });
+        res = await listadosApi.cancelar(listado.id, { motivo: motivoFinal });
       }
 
       if (res.success && res.data) {
@@ -168,9 +197,9 @@ export function ListadoTransitionModal({
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
         <ModalBody className="space-y-4">
           {/* Info del listado afectado */}
-          <div className="p-3.5 rounded-xl bg-cuadra-arena/30 border border-border flex items-center justify-between gap-3">
+          <div className="p-3 rounded-xl bg-cuadra-arena/30 border border-border flex items-center justify-between gap-3">
             <div className="min-w-0 space-y-0.5">
-              <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+              <span className="text-[10px] uppercase tracking-wider text-text-muted font-bold block">
                 Listado de Producción
               </span>
               <span className="font-mono font-black text-base text-text-primary tracking-wide block truncate">
@@ -183,12 +212,12 @@ export function ListadoTransitionModal({
             </span>
           </div>
 
-          <p className="text-xs text-text-secondary">{config.description}</p>
+          <p className="text-xs text-text-secondary leading-relaxed">{config.description}</p>
 
           {/* Selector de material a retroceder a Materiales Pendientes */}
           {isRetroceder && (
             <div className="space-y-1.5">
-              <Label htmlFor="frenteSelect">
+              <Label htmlFor="frenteSelect" className="text-xs font-semibold">
                 Material a retroceder <span className="text-danger">*</span>
               </Label>
               {frentesElegibles.length === 1 ? (
@@ -201,28 +230,63 @@ export function ListadoTransitionModal({
                   <FrenteStatusBadge estado={frentesElegibles[0].estado} />
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  <Select
-                    id="frenteSelect"
-                    value={selectedFrente}
-                    onChange={(e) => setSelectedFrente(e.target.value as TipoFrenteMaterial)}
-                    className="text-xs h-9"
-                  >
-                    <option value="">Selecciona el material a reiniciar...</option>
-                    {frentesElegibles.map((f) => (
-                      <option key={f.id} value={f.tipoFrente}>
-                        {TIPO_FRENTE_CONFIG[f.tipoFrente].nombre} — {f.estado === 'SEPARADO' ? 'Separado' : 'Entregado'}
-                      </option>
-                    ))}
-                  </Select>
-                  {frenteActual && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-app-surface rounded-lg border border-border/60 text-2xs text-text-secondary">
-                      <span className="font-medium">Estado actual:</span>
-                      <FrenteStatusBadge estado={frenteActual.estado} />
-                    </div>
-                  )}
-                </div>
+                <Select
+                  id="frenteSelect"
+                  value={selectedFrente}
+                  onChange={(e) => setSelectedFrente(e.target.value as TipoFrenteMaterial)}
+                  className="text-xs h-9"
+                >
+                  <option value="">Selecciona el material a reiniciar...</option>
+                  {frentesElegibles.map((f) => (
+                    <option key={f.id} value={f.tipoFrente}>
+                      {TIPO_FRENTE_CONFIG[f.tipoFrente].nombre} — {f.estado === 'SEPARADO' ? 'Separado' : 'Entregado'}
+                    </option>
+                  ))}
+                </Select>
               )}
+            </div>
+          )}
+
+          {/* Resumen visual de la transición */}
+          {isRetroceder && frenteActual && (
+            <div className="p-3 bg-app-surface rounded-xl border border-border/80 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                <span>Transición ({TIPO_FRENTE_CONFIG[frenteActual.tipoFrente].nombre})</span>
+                <span className="inline-flex items-center gap-1 text-warning-text font-medium">
+                  <Icon name="history" size="12px" />
+                  Reinicio a Pendientes
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-cuadra-arena/20 border border-border/40">
+                <div className="flex-1 min-w-0 flex items-center justify-center">
+                  <FrenteStatusBadge estado={frenteActual.estado} className="shadow-2xs" />
+                </div>
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-app-surface border border-border shadow-2xs shrink-0 text-text-muted">
+                  <Icon name="arrow_forward" size="14px" />
+                </div>
+                <div className="flex-1 min-w-0 flex items-center justify-center">
+                  <FrenteStatusBadge estado="PENDIENTE" className="shadow-2xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isRetroceder && (
+            <div className="p-3 bg-app-surface rounded-xl border border-border/80 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                <span>Transición de Estado</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-cuadra-arena/20 border border-border/40">
+                <div className="flex-1 min-w-0 flex items-center justify-center">
+                  <ListadoStatusBadge estado={listado.estado} className="shadow-2xs" />
+                </div>
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-app-surface border border-border shadow-2xs shrink-0 text-text-muted">
+                  <Icon name="arrow_forward" size="14px" />
+                </div>
+                <div className="flex-1 min-w-0 flex items-center justify-center">
+                  <ListadoStatusBadge estado="CANCELADO" className="shadow-2xs" />
+                </div>
+              </div>
             </div>
           )}
 
@@ -239,7 +303,7 @@ export function ListadoTransitionModal({
                 </div>
               </div>
               <div className="space-y-1 pt-1">
-                <Label htmlFor="confirmNumero" className="text-2xs font-bold text-text-primary">
+                <Label htmlFor="confirmNumero" className="text-[10px] font-bold text-text-primary">
                   Escribe el número de listado para confirmar:
                 </Label>
                 <Input
@@ -255,32 +319,65 @@ export function ListadoTransitionModal({
             </div>
           )}
 
-          {/* Campo de motivo */}
-          <div className="space-y-1.5">
-            <Label htmlFor="motivo">
-              Motivo <span className="text-danger">*</span>
+          {/* Campo de motivo con Select (y caja de texto únicamente si elige OTRO) */}
+          <div className="space-y-2">
+            <Label htmlFor="motivoSelect" className="text-xs font-semibold">
+              Motivo de la operación <span className="text-danger">*</span>
             </Label>
-            <Input
-              id="motivo"
-              multiline
-              textareaProps={{
-                id: 'motivo',
-                value: motivo,
-                onChange: (e) => setMotivo(e.target.value),
-                placeholder: 'Describe el motivo de la operación...',
-                maxLength: 500,
-                rows: 3,
+
+            <Select
+              id="motivoSelect"
+              value={motivoSelect}
+              onChange={(e) => {
+                const val = e.target.value;
+                setMotivoSelect(val);
+                if (val !== 'OTRO') {
+                  setMotivoDetalle('');
+                }
               }}
-            />
-            <div className="flex items-center justify-between">
-              <span
-                className={`text-2xs ${
-                  motivoTrimmed.length > 500 ? 'text-danger' : 'text-text-muted'
-                }`}
-              >
-                {motivoTrimmed.length}/500 caracteres
-              </span>
-            </div>
+              className="text-xs h-9"
+            >
+              <option value="">Selecciona un motivo...</option>
+              {motivosPredefinidos.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value="OTRO">Otro motivo (especificar)...</option>
+            </Select>
+
+            {motivoSelect === 'OTRO' && (
+              <div className="space-y-1 pt-1 animate-fadeIn">
+                <Label htmlFor="motivoDetalle" className="text-[11px] font-medium text-text-secondary">
+                  Describe el motivo específico <span className="text-danger">*</span>
+                </Label>
+                <Input
+                  id="motivoDetalle"
+                  multiline
+                  textareaProps={{
+                    id: 'motivoDetalle',
+                    value: motivoDetalle,
+                    onChange: (e) => setMotivoDetalle(e.target.value),
+                    placeholder: 'Describe detalladamente el motivo de la operación (mínimo 5 caracteres)...',
+                    maxLength: 500,
+                    rows: 2,
+                    autoFocus: true,
+                  }}
+                />
+                <div className="flex items-center justify-end text-[10px] text-text-muted">
+                  <span
+                    className={
+                      motivoDetalle.trim().length > 500 ||
+                      (motivoDetalle.trim().length > 0 && motivoDetalle.trim().length < 5)
+                        ? 'text-danger font-medium'
+                        : 'text-text-muted'
+                    }
+                  >
+                    {motivoDetalle.trim().length}/500 caracteres (mín. 5)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {error && (

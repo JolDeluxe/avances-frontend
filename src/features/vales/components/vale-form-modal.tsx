@@ -61,6 +61,9 @@ export function ValeFormModal({
   valeToEdit,
 }: ValeFormModalProps): ReactNode {
   const isEditing = Boolean(valeToEdit);
+  const isValeDescontado = Boolean(isEditing && valeToEdit && valeToEdit.estado === 'DESCONTADO');
+  const isValeCancelado = Boolean(isEditing && valeToEdit && valeToEdit.estado === 'CANCELADO');
+  const isBloqueadoParaEdicion = isValeDescontado || isValeCancelado;
 
   // Modo de registro: Individual vs Varios a la vez
   const [modoRegistro, setModoRegistro] = useState<ModoRegistro>('INDIVIDUAL');
@@ -98,6 +101,8 @@ export function ValeFormModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isFormDisabled = isSubmitting || isBloqueadoParaEdicion;
 
   // Línea seleccionada actualmente en el catálogo
   const selectedLinea = useMemo(() => {
@@ -572,7 +577,7 @@ export function ValeFormModal({
               value={nuevaSerie}
               onChange={(e) => setNuevaSerie(e.target.value.toUpperCase())}
               maxLength={20}
-              disabled={isSubmitting}
+              disabled={isFormDisabled}
               className="font-mono uppercase"
             />
           ) : (
@@ -580,7 +585,7 @@ export function ValeFormModal({
               id="serieId"
               value={serieId}
               onChange={(e) => setSerieId(e.target.value)}
-              disabled={isSubmitting}
+              disabled={isFormDisabled}
             >
               <option value="">Selecciona serie...</option>
               {series.map((s) => (
@@ -612,7 +617,7 @@ export function ValeFormModal({
               }
             }}
             maxLength={30}
-            disabled={isSubmitting}
+            disabled={isFormDisabled}
             className="font-mono uppercase"
           />
         </div>
@@ -629,25 +634,27 @@ export function ValeFormModal({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setModoNuevaLinea((v) => {
-                const next = !v;
-                if (next) {
-                  setAreaSeleccionada(null);
-                } else {
-                  setAreaSeleccionada(selectedLinea?.areaFija ?? null);
-                }
-                return next;
-              });
-              setIsLineaOpen(false);
-              setError(null);
-            }}
-            className="text-[11px] font-normal text-text-muted/80 hover:text-text-primary transition-colors cursor-pointer"
-          >
-            {modoNuevaLinea ? 'Usar existente' : '+ Nueva línea'}
-          </button>
+          {!isBloqueadoParaEdicion && (
+            <button
+              type="button"
+              onClick={() => {
+                setModoNuevaLinea((v) => {
+                  const next = !v;
+                  if (next) {
+                    setAreaSeleccionada(null);
+                  } else {
+                    setAreaSeleccionada(selectedLinea?.areaFija ?? null);
+                  }
+                  return next;
+                });
+                setIsLineaOpen(false);
+                setError(null);
+              }}
+              className="text-[11px] font-normal text-text-muted/80 hover:text-text-primary transition-colors cursor-pointer"
+            >
+              {modoNuevaLinea ? 'Usar existente' : '+ Nueva línea'}
+            </button>
+          )}
         </div>
 
         {modoNuevaLinea ? (
@@ -658,7 +665,7 @@ export function ValeFormModal({
             value={nuevaLinea}
             onChange={(e) => setNuevaLinea(e.target.value.toUpperCase())}
             maxLength={60}
-            disabled={isSubmitting}
+            disabled={isFormDisabled}
             className="uppercase"
           />
         ) : (
@@ -666,7 +673,7 @@ export function ValeFormModal({
             <button
               id="lineaSelect"
               type="button"
-              disabled={isSubmitting}
+              disabled={isFormDisabled}
               onClick={() => setIsLineaOpen((prev) => !prev)}
               className={`w-full h-10 px-3 rounded-lg border text-left text-sm flex items-center justify-between transition-colors cursor-pointer bg-app-surface ${
                 isLineaOpen
@@ -768,13 +775,13 @@ export function ValeFormModal({
         )}
       </div>
 
-      {/* Selector de Área Operativa condicional (para departamentos comodín como B7 o líneas nuevas) */}
+      {/* Selector de Área condicional (para departamentos comodín como B7 o líneas nuevas) */}
       {(modoNuevaLinea || selectedLinea?.requiereSeleccionArea || (!selectedLinea?.areaFija && Boolean(departamentoValeId))) && (
         <div className="space-y-1.5 p-3 rounded-lg bg-cuadra-arena/40 border border-cuadra-marrone/20">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
               <Icon name="category" size="14px" className="text-brand-primary" />
-              Área Operativa <span className="text-status-error">*</span>
+              Área <span className="text-status-error">*</span>
             </Label>
             <span className="text-[10px] text-text-muted">
               {modoNuevaLinea
@@ -835,7 +842,7 @@ export function ValeFormModal({
               type="date"
               value={fechaSolicitud}
               onChange={(e) => setFechaSolicitud(e.target.value)}
-              disabled={isSubmitting}
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -846,7 +853,7 @@ export function ValeFormModal({
                 type="time"
                 value={horaSolicitud}
                 onChange={(e) => setHoraSolicitud(e.target.value)}
-                disabled={isSubmitting}
+                disabled={isFormDisabled}
                 className="w-28 font-mono text-xs"
                 title="Hora de solicitud"
               />
@@ -856,7 +863,7 @@ export function ValeFormModal({
                   setTieneHoraSolicitud(false);
                   setHoraSolicitud('');
                 }}
-                disabled={isSubmitting}
+                disabled={isFormDisabled}
                 className="h-8 w-7 rounded-md inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-cuadra-arena/50 transition-colors cursor-pointer"
                 title="Quitar hora"
               >
@@ -935,6 +942,22 @@ export function ValeFormModal({
             className="flex flex-col flex-1 overflow-hidden"
           >
             <ModalBody className="space-y-4">
+              {isBloqueadoParaEdicion && (
+                <div className="flex items-start gap-2.5 p-3 rounded-lg border border-warning/30 bg-warning/10 text-warning-text text-xs">
+                  <Icon name="lock" size="18px" className="mt-0.5 shrink-0 text-warning" />
+                  <div className="space-y-1">
+                    <p className="font-semibold text-warning-text">
+                      {isValeCancelado ? 'Vale Cancelado' : 'Vale Finalizado (Descontado en Sistema)'}
+                    </p>
+                    <p className="text-2xs text-text-secondary leading-relaxed">
+                      {isValeCancelado
+                        ? 'No se pueden modificar los datos de un vale que ha sido cancelado.'
+                        : 'Este vale ya fue descontado en el sistema en su totalidad. Para corregir o modificar sus datos, debe retroceder primero el descuento a PENDIENTE desde el módulo de Auditoría o Historial.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {renderCamposFormulario()}
 
               {error && (
@@ -948,7 +971,7 @@ export function ValeFormModal({
               <Button type="button" variant="cancelar" onClick={handleRequestClose} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit" variant="guardar" disabled={isSubmitting}>
+              <Button type="submit" variant="guardar" disabled={isSubmitting || isBloqueadoParaEdicion}>
                 {isSubmitting ? (
                   <>
                     <Spinner size="18px" className="mr-2" />

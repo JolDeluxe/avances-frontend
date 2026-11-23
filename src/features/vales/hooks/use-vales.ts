@@ -42,6 +42,7 @@ export interface UseValesOptions {
   scopeView?: ValeFilters['scopeView'];
   customLimit?: number;
   fixedEstado?: EstadoVale | string;
+  excludeEstado?: EstadoVale;
   fixedFechaDesde?: string;
   fixedFechaHasta?: string;
 }
@@ -166,7 +167,11 @@ export function useVales(
         const resolvedFechaDesde = fixedFechaDesde ?? fechaDesdeParam;
         const resolvedFechaHasta = fixedFechaHasta ?? fechaHastaParam;
 
-        if (resolvedEstado) filters.estado = resolvedEstado;
+        if (resolvedEstado) {
+          filters.estado = resolvedEstado;
+        } else if (opts.excludeEstado) {
+          filters.excludeEstado = opts.excludeEstado;
+        }
         if (serieId) filters.serieId = serieId;
         if (departamentoValeId) filters.departamentoValeId = departamentoValeId;
         if (areaParam) filters.area = areaParam;
@@ -175,7 +180,11 @@ export function useVales(
         if (resolvedFechaHasta) filters.fechaHasta = resolvedFechaHasta;
 
         const data = await valesApi.getVales(filters);
-        setItems(data.items ?? []);
+        let loadedItems = data.items ?? [];
+        if (opts.excludeEstado && !resolvedEstado) {
+          loadedItems = loadedItems.filter((it) => it.estado !== opts.excludeEstado);
+        }
+        setItems(loadedItems);
         setConteosPorEstado(data.conteosPorEstado ?? DEFAULT_CONTEOS_ESTADO);
         setConteosPorArea(data.conteosPorArea ?? DEFAULT_CONTEOS_AREA);
         setPagination({

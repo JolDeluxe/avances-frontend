@@ -77,10 +77,23 @@ interface ListadosParalelaTableProps {
 function IndicadorProgresoFrente({
   estado,
   label,
+  isCancelado,
 }: {
   estado?: EstadoFrenteMaterial;
   label?: string;
+  isCancelado?: boolean;
 }): ReactNode {
+  if (isCancelado || (estado as string) === 'CANCELADO') {
+    return (
+      <span
+        className="inline-flex items-center justify-center select-none"
+        title={`${label ? `${label}: ` : ''}Cancelado`}
+      >
+        <Icon name="close" size="16px" weight={700} className="text-danger shrink-0" />
+      </span>
+    );
+  }
+
   if (!estado) {
     return (
       <span className="text-text-muted/30 text-xs select-none font-bold" title="No aplica para este listado">
@@ -278,10 +291,10 @@ function MenuAccionesFila({
               <span>Ver detalles</span>
             </button>
 
-            {/* Editar listado: ADMIN/SUPER_ADMIN pueden si no están todos en DESCONTADO ni cancelado/descontado; otros roles solo en PENDIENTE */}
+            {/* Editar listado: Disponible siempre que el usuario tenga permiso y no esté cancelado */}
             {acciones.canEditar &&
               acciones.onEditar &&
-              (acciones.canEditar ? (!frentes.every((f) => f.estado === 'DESCONTADO') && row.estado !== 'CANCELADO' && row.estado !== 'DESCONTADO') : row.estado === 'PENDIENTE') && (
+              row.estado !== 'CANCELADO' && (
                 <button
                   type="button"
                   onClick={() => {
@@ -843,6 +856,7 @@ export function ListadosPendientesParalelaTable({
                                   <IndicadorProgresoFrente
                                     estado={estadoVisual}
                                     label={TIPO_FRENTE_CONFIG[frenteKey].nombre}
+                                    isCancelado={bota.estado === 'CANCELADO'}
                                   />
                                 </td>
                               );
@@ -999,6 +1013,7 @@ export function ListadosPendientesParalelaTable({
                                   <IndicadorProgresoFrente
                                     estado={estadoVisual}
                                     label={TIPO_FRENTE_CONFIG[frenteKey].nombre}
+                                    isCancelado={acc.estado === 'CANCELADO'}
                                   />
                                 </td>
                               );
